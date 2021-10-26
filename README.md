@@ -52,9 +52,9 @@ a.2.1). 方案一：用网络估计多帧上点之间的similarity。(N * T) * (
 a.2.2). 方案二：用网络只估计单帧内的点之间的similarity，多帧之间用点之间的cosine similarity or normalized inner product的负数或者倒数作为cost，利用GNN和匈牙利算法估计帧间points间的association relation从而得到tracking。
 
 
-*关于全景跟踪具体怎么实现的方案，可以参考这篇论文Detection, Tracking, and Counting Meets Drones in Crowds: A Benchmark
+**关于全景跟踪具体怎么实现的方案，可以参考这篇论文Detection, Tracking, and Counting Meets Drones in Crowds: A Benchmark
 https://arxiv.org/pdf/2105.02440.pdf
-这篇paper设计的网络以及data association的方案就类似于一堆点和另一堆点进行data association，与我们的全景跟踪场景非常相似。值得参考学习。*
+这篇paper设计的网络以及data association的方案就类似于一堆点和另一堆点进行data association，与我们的全景跟踪场景非常相似。值得参考学习。**
 
 
 
