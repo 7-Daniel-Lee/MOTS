@@ -55,15 +55,3 @@ a.2.2). 方案二：用网络只估计单帧内的点之间的similarity，多�
 **关于全景跟踪具体怎么实现的方案，可以参考这篇论文Detection, Tracking, and Counting Meets Drones in Crowds: A Benchmark
 https://arxiv.org/pdf/2105.02440.pdf
 这篇paper设计的网络以及data association的方案就类似于一堆点和另一堆点进行data association，与我们的全景跟踪场景非常相似。值得参考学习。**
-
-
-
-
-### Project10. Feature Extraction for Automotive Radar based Segmentation
-1.用1 * 1卷积替换SA层的max pooling
-
-2.用类似SK-NET的方案，split阶段分别使用1* 1卷积和1*3卷积
-
-        2.1)在npoint和C维度使用1*3卷积
-        2.2)在npoint和nsample维度使用1*3卷积，然后在新的nsample维度使用某种pooling使此维度为1
-3.用gMLP替换SK-NET中Fuse环节计算权重的部分，即对每个split得到的feature map使用gMLP处理，再对每个元素作softmax得到该元素的权重
