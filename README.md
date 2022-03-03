@@ -27,6 +27,7 @@ https://arxiv.org/pdf/2004.08189.pdf
 a). 在现在的directly points processing deep learning network模型上，研究是否可能实现multi-task learning的方案，例如用同一个网络构架同时实现语义分割，实例分割，跟踪等多种任务（即基于radar detection points全景分割和全景跟踪？）。另外，（作为扩展内容）在这个基础之上，是否可以实现lane estimation以及drivable area estimation？
 
 那么就需要思考并调研以下几个问题：
+
 --Radar panoptic segmentation and tracking用radarscenes数据集可以做吗（换言之，radarscenes提供的panoptic segmentation and tracking的groundtruth信息吗）？只能做panoptic segmentation还是也可以做panoptic tracking？radar panoptic segmentation是否就是可以用multi-task learning的方案（一个task做dynamic points和static points的分割，另一个task做instance segmentation）直接做？又是否可能同时做3个task结合（一个task做dynamic points和static points的segmentation，另一个task做instance segmentation，第三个task做ghost/anomaly points分割）？
 
 --如何利用静态点，（甚至在没有groundtruth的条件下）通过某些方式的deep learning实现lane estimation以及drivable area estimation？
