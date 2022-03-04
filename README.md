@@ -60,4 +60,4 @@ a.2.2). 方案二：用网络只估计单帧内的点之间的similarity，多�
 https://arxiv.org/pdf/2105.02440.pdf
 这篇paper设计的网络以及data association的方案就类似于一堆点和另一堆点进行data association，与我们的全景跟踪场景非常相似。值得参考学习。**
 
-a.3). lane estimation以及drivable area estimation如何在可能没有groundtruth信息的条件下，通过deep learning的方式来对静态点实现。
+a.3). lane estimation以及drivable area estimation如何在可能没有groundtruth信息的条件下，通过(unsupervised/self-supervised )deep learning的方式来对静态点实现lane estimation以及drivable area estimation。
