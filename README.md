@@ -13,6 +13,7 @@ Reference Paper:
 Panoptic Segmentation and Tracking
 2021.Panoptic nuScenes: A Large-Scale Benchmark for LiDAR Panoptic Segmentation and Tracking
 
+Panoptic Segmentation
 2021(CVPR).4D Panoptic LiDAR Segmentation
 
 
