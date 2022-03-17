@@ -18,7 +18,7 @@ Reference Paper:
 
 
 #### Panoptic Tracking
-2020.MOPT: Multi-Object Panoptic Tracking
+2020(CVPR).MOPT: Multi-Object Panoptic Tracking
 
 https://arxiv.org/pdf/2004.08189.pdf
 
