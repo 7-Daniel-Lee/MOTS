@@ -13,11 +13,17 @@ Reference Paper:
 Panoptic Segmentation and Tracking
 2021.Panoptic nuScenes: A Large-Scale Benchmark for LiDAR Panoptic Segmentation and Tracking
 
+2021(CVPR).4D Panoptic LiDAR Segmentation
+
 
 Panoptic Tracking
 2020.MOPT: Multi-Object Panoptic Tracking
 
 https://arxiv.org/pdf/2004.08189.pdf
+
+2022(IROS).Learning Moving-Object Tracking with FMCW LiDAR
+
+https://arxiv.org/pdf/2203.00959.pdf
 
 
 
