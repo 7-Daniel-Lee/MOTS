@@ -54,6 +54,10 @@ Panoptic Tracking：
 2020.MOPT: Multi-Object Panoptic Tracking
 https://arxiv.org/pdf/2004.08189.pdf
 
+With Transformer:
+2022.Panoptic SegFormer: Delving Deeper into Panoptic Segmentation with Transformers
+https://arxiv.org/pdf/2109.03814.pdf
+
 
 ### 具体方案如下：
 
@@ -68,3 +72,6 @@ https://arxiv.org/pdf/2105.02440.pdf
 这篇paper设计的网络以及data association的方案就类似于一堆点和另一堆点进行data association，与我们的全景跟踪场景非常相似。值得参考学习。**
 
 a.3). lane estimation以及drivable area estimation如何在可能没有groundtruth信息的条件下，通过(unsupervised/self-supervised )deep learning的方式来对静态点实现lane estimation以及drivable area estimation。
+
+
+**注意：仍然需要探索结合Transformer或者visual MLP的方案。可以试着结合VAN（2022.Visual Attention Network  https://arxiv.org/abs/2202.09741 ）**
