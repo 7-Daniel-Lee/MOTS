@@ -1,4 +1,4 @@
-# Radar_PointNet_Panoptic_Segmentation(计划交给黄师兄的学生完成)
+# Radar_PointNet_Panoptic_Segmentation(计划交给黄师兄的学生完成或者熊子量合作完成)
 This repo is regarding the radar-based panoptic segmentation and tracking which is part of the radar-based data processing for ADAS and AD collaboration project. The main contributors are Weiyi Xiong, Jianan Liu and Bing Zhu. The purpose of this project is to investigate algorithms of radar-based panoptic segmentation and tracking in BEV/3D space.
 
 
