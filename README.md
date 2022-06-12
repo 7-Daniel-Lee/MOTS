@@ -31,7 +31,7 @@ https://arxiv.org/pdf/2203.00959.pdf
 
 
 ## Project9. Automotive Radar Point Cloud based Panoptic Segmentation and Tracking（预计2022年4-6月主要阅读论文，理解设计idea，7至8月底前完成代码论文初稿）
-*注意：已经有人在RadarConf 2022上做过4D Imaging Radar Point Cloud based Panoptic Segmentation，见：
+* - 注意：已经有人在RadarConf 2022上做过4D Imaging Radar Point Cloud based Panoptic Segmentation，见：
 2022.Panoptic Segmentation for Automotive Radar Point Cloud
 https://ieeexplore.ieee.org/document/9764218
 不过还没有实现Panoptic Tracking
