@@ -31,6 +31,12 @@ https://arxiv.org/pdf/2203.00959.pdf
 
 
 ## Project9. Automotive Radar Point Cloud based Panoptic Segmentation and Tracking（预计2022年4-6月主要阅读论文，理解设计idea，7至8月底前完成代码论文初稿）
+
+注意：已经有人在RadarConf 2022上做过Radar based Panoptic Segmentation，见：
+2022.Panoptic Segmentation for Automotive Radar Point Cloud
+https://ieeexplore.ieee.org/document/9764218
+不过还没有实现Panoptic Tracking
+
 a). 在现在的directly points processing deep learning network模型上，研究是否可能实现multi-task learning的方案，例如用同一个网络构架同时实现语义分割，实例分割，跟踪等多种任务（即基于radar detection points全景分割和全景跟踪？）。另外，（作为扩展内容）在这个基础之上，是否可以实现lane estimation以及drivable area estimation？
 
 那么就需要思考并调研以下几个问题：
