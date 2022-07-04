@@ -1,0 +1,14 @@
+torch~=1.7.1
+numpy~=1.21.0
+joblib~=1.0.1
+matplotlib~=3.4.2
+sklearn~=0.0
+scikit-learn~=0.24.2
+tqdm~=4.61.1
+thop~=0.0.31.post2005241907
+torchsummary~=1.5.1
+pandas~=1.2.5
+scipy~=1.7.0
+h5py~=3.3.0
+tensorboardX~=2.4
+hdbscan~=0.8.27
