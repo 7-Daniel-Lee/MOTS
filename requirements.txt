@@ -12,3 +12,6 @@ scipy~=1.7.0
 h5py~=3.3.0
 tensorboardX~=2.4
 hdbscan~=0.8.27
+filterpy==1.4.5
+scikit-image==0.17.2
+lap==0.4.0
