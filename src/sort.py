@@ -20,7 +20,7 @@ from __future__ import print_function
 import os
 import numpy as np
 import matplotlib
-matplotlib.use('TkAgg')
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from skimage import io
@@ -298,7 +298,7 @@ if __name__ == '__main__':
       print("Processing %s."%(seq))
       for frame in range(int(seq_dets[:,0].max())):
         frame += 1 #detection and frame numbers begin at 1
-        dets = seq_dets[seq_dets[:, 0]==frame, 2:7]
+        dets = seq_dets[seq_dets[:, 0]==frame, 2:7] #choose a frame 加断点看看dets的结构
         dets[:, 2:4] += dets[:, 0:2] #convert to [x1,y1,w,h] to [x1,y1,x2,y2]
         total_frames += 1
 
