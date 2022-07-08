@@ -185,3 +185,5 @@ Below is the gist of how to instantiate and update SORT. See the ['__main__'](ht
     ...
     
  
+How to save det.txt?  
+[Format](https://github.com/abewley/sort/issues/61#issuecomment-497614711)
