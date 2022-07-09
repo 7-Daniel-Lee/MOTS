@@ -78,8 +78,19 @@ https://arxiv.org/pdf/2105.02440.pdf
 
 a.3). lane estimation以及drivable area estimation如何在可能没有groundtruth信息的条件下，通过(unsupervised/self-supervised )deep learning的方式来对静态点实现lane estimation以及drivable area estimation。
 
-
 **注意：仍然需要探索结合Transformer或者visual MLP的方案。可以试着结合VAN（2022.Visual Attention Network  https://arxiv.org/abs/2202.09741 ）**
+
+
+
+
+
+### 最新计划
+
+1). Instace level tracking, evaluate using point-wise panoptic tracking metrics. 根据上一帧估计出的instance的predicted state和这一帧估计出的instance进行instance level的用匈牙利算法的GNN data association，这样其实就是只对instance tracking，只是最后把结果体现在point level上算metric即可。这种方案逻辑上不会修正instance segmentation的结果，panoptic tracking的效果极大的正比于instance segmentation准确度
+
+2). point level tracking, evaluate using point-wise panoptic tracking metrics. 根据上一帧的points的predicted states和这一帧的points进行point level的用匈牙利算法的GNN data association（对于每个point都做tracking），这样得出上一帧和这一帧point间的对应关系，然后再和instance segmentation的结果比对，根据一些规则修正panoptic tracking的结果。这种方案逻辑上会修正instance segmentation的结果，panoptic tracking的output会对instance segmentation有个反馈，从而可以相互修正准确度
+
+3). 以上1). 2). 都是用匈牙利算法实现GNN for data association + rule based track management，可是对于radar数据很可能用JPDA + rule based track management或者JIPDA效果会更好。所以可以考虑用JPDA + rule based track management或者JIPDA替换1). 2).中的GNN for data association + rule based track management。
 
 
 SORT
