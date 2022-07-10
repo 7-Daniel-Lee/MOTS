@@ -109,4 +109,4 @@ venv.bak/
 Porject_1
 instance_seg
 data/train
-.ipynb
+src/*.ipynb

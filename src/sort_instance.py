@@ -1,19 +1,5 @@
 """
-    SORT: A Simple, Online and Realtime Tracker
-    Copyright (C) 2016-2020 Alex Bewley alex@bewley.ai
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    SORT adpted version for tracking by instance segmentation
 """
 from __future__ import print_function
 
@@ -46,7 +32,8 @@ def linear_assignment(cost_matrix):
 
 def iou_batch(bb_test, bb_gt):
   """
-  From SORT: Computes IOU between two bboxes in the form [x1,y1,x2,y2]
+  From SORT: Computes IOU between two instances in the form [x1,y1,x2,y2]
+  return IOU matrix, the negative of cost matrix
   """
   bb_gt = np.expand_dims(bb_gt, 0)
   bb_test = np.expand_dims(bb_test, 1)
@@ -63,32 +50,32 @@ def iou_batch(bb_test, bb_gt):
   return(o)  
 
 
-def convert_bbox_to_z(bbox):
-  """
-  Takes a bounding box in the form [x1,y1,x2,y2] and returns z in the form
-    [x,y,s,r] where x,y is the centre of the box and s is the scale/area and r is
-    the aspect ratio
-  """
-  w = bbox[2] - bbox[0]
-  h = bbox[3] - bbox[1]
-  x = bbox[0] + w/2.
-  y = bbox[1] + h/2.
-  s = w * h    #scale is just area
-  r = w / float(h)
-  return np.array([x, y, s, r]).reshape((4, 1))
+# def convert_bbox_to_z(bbox):
+#   """
+#   Takes a bounding box in the form [x1,y1,x2,y2] and returns z in the form
+#     [x,y,s,r] where x,y is the centre of the box and s is the scale/area and r is
+#     the aspect ratio
+#   """
+#   w = bbox[2] - bbox[0]
+#   h = bbox[3] - bbox[1]
+#   x = bbox[0] + w/2.
+#   y = bbox[1] + h/2.
+#   s = w * h    #scale is just area
+#   r = w / float(h)
+#   return np.array([x, y, s, r]).reshape((4, 1))
 
 
-def convert_x_to_bbox(x,score=None):
-  """
-  Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
-    [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right
-  """
-  w = np.sqrt(x[2] * x[3])
-  h = x[2] / w
-  if(score==None):
-    return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.]).reshape((1,4))
-  else:
-    return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.,score]).reshape((1,5))
+# def convert_x_to_bbox(x,score=None):
+#   """
+#   Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
+#     [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right
+#   """
+#   w = np.sqrt(x[2] * x[3])
+#   h = x[2] / w
+#   if(score==None):
+#     return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.]).reshape((1,4))
+#   else:
+#     return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.,score]).reshape((1,5))
 
 
 class KalmanBoxTracker(object):
@@ -274,7 +261,6 @@ if __name__ == '__main__':
   display = args.display
   phase = args.phase
   total_time = 0.0
-  total_frames = 0
   colours = np.random.rand(32, 3) #used only for display
   if(display):
     if not os.path.exists('mot_benchmark'):
@@ -286,45 +272,40 @@ if __name__ == '__main__':
 
   if not os.path.exists('output'):
     os.makedirs('output')
-  pattern = os.path.join(args.seq_path, phase, '*', 'det', 'det.txt')
-  for seq_dets_fn in glob.glob(pattern):
-    mot_tracker = Sort(max_age=args.max_age, 
-                       min_hits=args.min_hits,
-                       iou_threshold=args.iou_threshold) #create instance of the SORT tracker
-    seq_dets = np.loadtxt(seq_dets_fn, delimiter=',')
-    seq = seq_dets_fn[pattern.find('*'):].split(os.path.sep)[0]
-    
-    with open(os.path.join('output', '%s.txt'%(seq)),'w') as out_file:
-      print("Processing %s."%(seq))
-      for frame in range(int(seq_dets[:,0].max())):
-        frame += 1 #detection and frame numbers begin at 1
-        dets = seq_dets[seq_dets[:, 0]==frame, 2:7] #choose a frame 加断点看看dets的结构
-        dets[:, 2:4] += dets[:, 0:2] #convert to [x1,y1,w,h] to [x1,y1,x2,y2]
-        total_frames += 1
+  # load segments
+  segments_path = os.path.join(args.seq_path, phase, 'SegmentAllFrames.npy')
+  sequence_segments = np.load(segments_path, allow_pickle='TRUE')
+  
+  mot_tracker = Sort(max_age=args.max_age, 
+                      min_hits=args.min_hits,
+                      iou_threshold=args.iou_threshold) #create instance of the SORT tracker
+  
+  for frame_idx, frame in enumerate(sequence_segments.item()):  
+    dets[:, 2:4] += dets[:, 0:2] #convert to [x1,y1,w,h] to [x1,y1,x2,y2] #????? 不需要转换 
 
-        if(display):
-          fn = os.path.join('mot_benchmark', phase, seq, 'img1', '%06d.jpg'%(frame))
-          im =io.imread(fn)
-          ax1.imshow(im)
-          plt.title(seq + ' Tracked Targets')
+    if(display):
+      fn = os.path.join('mot_benchmark', phase, seq, 'img1', '%06d.jpg'%(frame))
+      im =io.imread(fn)
+      ax1.imshow(im)
+      plt.title(seq + ' Tracked Targets')
 
-        start_time = time.time()
-        trackers = mot_tracker.update(dets)
-        cycle_time = time.time() - start_time
-        total_time += cycle_time
+    start_time = time.time()
+    trackers = mot_tracker.update(dets)
+    cycle_time = time.time() - start_time
+    total_time += cycle_time
 
-        for d in trackers:
-          print('%d,%d,%.2f,%.2f,%.2f,%.2f,1,-1,-1,-1'%(frame,d[4],d[0],d[1],d[2]-d[0],d[3]-d[1]),file=out_file)
-          if(display):
-            d = d.astype(np.int32)
-            ax1.add_patch(patches.Rectangle((d[0],d[1]),d[2]-d[0],d[3]-d[1],fill=False,lw=3,ec=colours[d[4]%32,:]))
+    for d in trackers:
+      print('%d,%d,%.2f,%.2f,%.2f,%.2f,1,-1,-1,-1'%(frame,d[4],d[0],d[1],d[2]-d[0],d[3]-d[1]),file=out_file)
+      if(display):
+        d = d.astype(np.int32)
+        ax1.add_patch(patches.Rectangle((d[0],d[1]),d[2]-d[0],d[3]-d[1],fill=False,lw=3,ec=colours[d[4]%32,:]))
 
-        if(display):
-          fig.canvas.flush_events()
-          plt.draw()
-          ax1.cla()
+    if(display):
+      fig.canvas.flush_events()
+      plt.draw()
+      ax1.cla()
 
-  print("Total Tracking took: %.3f seconds for %d frames or %.1f FPS" % (total_time, total_frames, total_frames / total_time))
+  print("Total Tracking took: %.3f seconds for %d frames or %.1f FPS" % (total_time, frame+1, (frame+1) / total_time))
 
   if(display):
     print("Note: to get real runtime results run without the option: --display")
