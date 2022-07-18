@@ -19,6 +19,10 @@ from distance import convex_hull_iou, euclidea_distance
 
 np.random.seed(0)
 
+# visualization for 5 classes
+COLOR = ("red","green","black","orange","purple")
+CLASS = ("Car", "Pedestrian", "Pedestrian Group", "Two Wheeler", "Large Vehicle")
+
 
 def linear_assignment(cost_matrix):
   try:
@@ -45,33 +49,6 @@ def iou_batch(segment_instances, tracked_instances):
   return iou_matrix
 
 
-# def convert_bbox_to_z(bbox):
-#   """
-#   Takes a bounding box in the form [x1,y1,x2,y2] and returns z in the form
-#     [x,y,s,r] where x,y is the centre of the box and s is the scale/area and r is
-#     the aspect ratio
-#   """
-#   w = bbox[2] - bbox[0]
-#   h = bbox[3] - bbox[1]
-#   x = bbox[0] + w/2.
-#   y = bbox[1] + h/2.
-#   s = w * h    #scale is just area
-#   r = w / float(h)
-#   return np.array([x, y, s, r]).reshape((4, 1))
-
-
-# def convert_x_to_bbox(x,score=None):
-#   """
-#   Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
-#     [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right
-#   """
-#   w = np.sqrt(x[2] * x[3])
-#   h = x[2] / w
-#   if(score==None):
-#     return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.]).reshape((1,4))
-#   else:
-#     return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.,score]).reshape((1,5))
-
 def convert_centroid_to_instance(state:np.ndarray, frame:dict)->np.ndarray:
   '''
   Given updated state of instance centeroid, find the closest segemented instance
@@ -94,9 +71,9 @@ def extract_instance_centeroid(instance:np.ndarray)->Tuple[float, float]:
   '''
   extract the centeroid of an instance by getting the mean of x, y
   '''
-  x_center = instance[:, 0].mean()
-  y_center = instance[:, 1].mean()
-  return (x_center, y_center)
+  x_center = instance[:, :, 0].mean()
+  y_center = instance[:, :, 1].mean()
+  return np.array((x_center, y_center)).reshape((2, 1))
 
 
 class KalmanBoxTracker(object):
@@ -110,7 +87,7 @@ class KalmanBoxTracker(object):
     """
     #define constant velocity model
     self.kf = KalmanFilter(dim_x=4, dim_z=2) 
-    self.kf.F = np.array([[1,0,1,0],[0,1,0,1],[0,0,1,0],[0,0,0,1]])
+    self.kf.F = np.array([[1,0,1,0],[0,1,0,1],[0,0,1,0],[0,0,0,1]]) # 改成deta t 反应真实速度
     self.kf.H = np.array([[1,0,0,0],[0,1,0,0]])
     # F is the transition matrix with constant velocity motion model, which will be used to multiply with vector [x, y, x_v, y_v]^T in prediction step.
     # H is measurement matrix which represents the measurement model in update step.
@@ -118,12 +95,11 @@ class KalmanBoxTracker(object):
     # Measurement noise covariance matrix, R
     # State covariance matrix, P
 
-  # self.kf.R[2:,2:] *= 10.  #?  corresponds to s, r
-    self.kf.P[4:,4:] *= 1000. #give high uncertainty to the unobservable initial velocities
+  # self.kf.R[2:,2:] *= 10.  #?  corresponds to s, r #打断点看一下值
+    self.kf.P[2:,2:] *= 1000. #give high uncertainty to the unobservable initial velocities
     # in this way, we can choose if we trust measurement!!!!
-    self.kf.P *= 10.   # initial value??
-    # self.kf.Q[-1,-1] *= 0.01
-    # self.kf.Q[4:,4:] *= 0.01
+    self.kf.P *= 10.   # initial value
+    self.kf.Q[2:, 2:] *= 0.01  # 通过折半查找寻优
 
 
     self.kf.x[:2] = extract_instance_centeroid(cluster)
@@ -145,25 +121,25 @@ class KalmanBoxTracker(object):
     self.hit_streak += 1
     self.kf.update(extract_instance_centeroid(cluster))
 
-  def predict(self):
+  def predict(self, frame):
     """
     Advances the state vector and returns the predicted bounding box estimate.
     """
-    if((self.kf.x[6]+self.kf.x[2])<=0):
-      self.kf.x[6] *= 0.0
+    # if((self.kf.x[6]+self.kf.x[2])<=0):   
+    #   self.kf.x[6] *= 0.0
     self.kf.predict()
     self.age += 1
     if(self.time_since_update>0):
       self.hit_streak = 0
-    self.time_since_update += 1
-    self.history.append(convert_centroid_to_instance(self.kf.x))
+    self.time_since_update += 1 # the number of prediction without update by new measurements
+    self.history.append(convert_centroid_to_instance(self.kf.x, frame))
     return self.history[-1]
 
-  def get_state(self):
+  def get_state(self, frame):
     """
-    Returns the current bounding box estimate.
+    Returns the current instance estimate.
     """
-    return convert_centroid_to_instance(self.kf.x)
+    return convert_centroid_to_instance(self.kf.x, frame)
 
 
 def associate_detections_to_trackers(instances, trackers, iou_threshold = 0.3):
@@ -175,6 +151,7 @@ def associate_detections_to_trackers(instances, trackers, iou_threshold = 0.3):
   """
   if(len(trackers)==0):
     return np.empty((0,2),dtype=int), np.arange(len(instances)), np.empty((0,5),dtype=int)  # change!  # 为什么中间那个是arange，其他两个是empty？
+    # matched, unmatched_dets, unmatched_trks
 
   iou_matrix = iou_batch(instances, trackers)
 
@@ -188,9 +165,9 @@ def associate_detections_to_trackers(instances, trackers, iou_threshold = 0.3):
     matched_indices = np.empty(shape=(0,2))
 
   unmatched_detections = []
-  for d, det in enumerate(detections):
+  for d, det in enumerate(instances):
     if(d not in matched_indices[:,0]):
-      unmatched_detections.append(d)
+      unmatched_detections.append(d) # list of instances id
   unmatched_trackers = []
   for t, trk in enumerate(trackers):
     if(t not in matched_indices[:,1]):
@@ -212,6 +189,10 @@ def associate_detections_to_trackers(instances, trackers, iou_threshold = 0.3):
   return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
+def visualize_tracker():
+  return
+
+
 class Sort(object):
   def __init__(self, max_age=1, min_hits=3, iou_threshold=0.3):
     """
@@ -223,7 +204,7 @@ class Sort(object):
     self.trackers = []
     self.frame_count = 0
 
-  def update(self, clusters:List[np.ndarray]):
+  def update(self, clusters:List[np.ndarray], frame):
     """
     Params:
       clusters - a list of ndarray 
@@ -239,7 +220,7 @@ class Sort(object):
     to_del = []
     ret = []
     for t in range(len(self.trackers)):
-      pred = self.trackers[t].predict()[0]
+      pred = self.trackers[t].predict(frame)
       trks.append(pred)
     #   if np.any(np.isnan(pos)):   # if any of the predictions is Nan, delete the tracker #？？？？ 
     #     to_del.append(t)
@@ -250,24 +231,27 @@ class Sort(object):
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(dets[m[0], :])
+      self.trackers[m[1]].update(clusters[m[0]])
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
-        trk = KalmanBoxTracker(dets[i,:])      
+        trk = KalmanBoxTracker(clusters[i])   # one new tracker for each unmatched cluster   
         self.trackers.append(trk)
     i = len(self.trackers)
     for trk in reversed(self.trackers):
-        d = trk.get_state()[0]
+        d = trk.get_state(frame)
+        # rule-based track management
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
-          ret.append(np.concatenate((d,[trk.id+1])).reshape(1,-1)) # +1 as MOT benchmark requires positive
+          ret.append(d)
+          # d:the current instance estimate  # 格式必须修改! 无法concatenate
         i -= 1
         # remove dead tracklet
         if(trk.time_since_update > self.max_age):
           self.trackers.pop(i)
     if(len(ret)>0):
-      return np.concatenate(ret)
+      return ret
     return np.empty((0,5))
+
 
 def parse_args():
     """Parse input arguments."""
@@ -288,17 +272,10 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  display = args.display
+  # display = args.display
+  display = True
   phase = args.phase
   total_time = 0.0
-  colours = np.random.rand(32, 3) #used only for display
-  if(display):
-    if not os.path.exists('mot_benchmark'):
-      print('\n\tERROR: mot_benchmark link not found!\n\n    Create a symbolic link to the MOT benchmark\n    (https://motchallenge.net/data/2D_MOT_2015/#download). E.g.:\n\n    $ ln -s /path/to/MOT2015_challenge/2DMOT2015 mot_benchmark\n\n')
-      exit()
-    plt.ion()
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111, aspect='equal')
 
   if not os.path.exists('output'):
     os.makedirs('output')
@@ -309,33 +286,40 @@ if __name__ == '__main__':
   mot_tracker = Sort(max_age=args.max_age, 
                       min_hits=args.min_hits,
                       iou_threshold=args.iou_threshold) #create instance of the SORT tracker
-  
-  for frame_idx, frame in enumerate(sequence_segments.item()):  
+  if(display):
+    plt.ion()
+    fig = plt.figure()
+    ax1 = fig.add_subplot(111, aspect='equal')
+    # fig.axis('off')
+  for frame_idx, frame in enumerate(sequence_segments.item().values()):  
     clusters = [instance['points'] for instance in frame.values()]
+    class_ids = [instance['class_ID'] for instance in frame.values()]
+  
+    # start_time = time.time()
+    # trackers = mot_tracker.update(clusters, frame)
+    # cycle_time = time.time() - start_time
+    # total_time += cycle_time
 
-    # if(display):
-    #   fn = os.path.join('mot_benchmark', phase, seq, 'img1', '%06d.jpg'%(frame))
-    #   im =io.imread(fn)
-    #   ax1.imshow(im)
-    #   plt.title(seq + ' Tracked Targets')
+    if(display):
+      # display segementor output with scatter plot
+      for idx, class_id in enumerate(class_ids):
+        x = clusters[idx][:, :, 0]
+        y = clusters[idx][:, :, 1]
+        ax1.scatter(x, y, c=COLOR[class_id], s=10)
+      ax1.set_xlabel('x/m')
+      ax1.set_ylabel('y/m')
+      ax1.set_xlim(-500, 500)
+      ax1.set_ylim(-500, 500)
+      # #plt.legend
+      # 然后用凸包的线表示tracking结果
+      # fig.canvas.draw()
+      fig.canvas.flush_events()
+      plt.show() 
+      plt.pause(.1)
+      input("Press Enter to Continue")
+      ax1.cla()
 
-    start_time = time.time()
-    trackers = mot_tracker.update(clusters)
-    cycle_time = time.time() - start_time
-    total_time += cycle_time
-
-    # for d in trackers:
-    #   print('%d,%d,%.2f,%.2f,%.2f,%.2f,1,-1,-1,-1'%(frame,d[4],d[0],d[1],d[2]-d[0],d[3]-d[1]),file=out_file)
-    #   if(display):
-    #     d = d.astype(np.int32)
-    #     ax1.add_patch(patches.Rectangle((d[0],d[1]),d[2]-d[0],d[3]-d[1],fill=False,lw=3,ec=colours[d[4]%32,:]))
-
-    # if(display):
-    #   fig.canvas.flush_events()
-    #   plt.draw()
-    #   ax1.cla()
-
-  print("Total Tracking took: %.3f seconds for %d frames or %.1f FPS" % (total_time, frame+1, (frame+1) / total_time))
+  # print("Total Tracking took: %.3f seconds for %d frames or %.1f FPS" % (total_time, frame+1, (frame+1) / total_time))
 
   if(display):
     print("Note: to get real runtime results run without the option: --display")
