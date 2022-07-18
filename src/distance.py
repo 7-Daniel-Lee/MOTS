@@ -30,4 +30,4 @@ def convex_hull_iou(gnd_instance:ndarray, seg_instance:ndarray)->float:
 
 
 def euclidea_distance(center1_x, center1_y, cetner2_x, center2_y)->float:
-       return sqrt((center1_x-cetner2_x)^2+(center1_y-center2_y)^2)
+       return sqrt((center1_x-cetner2_x)*(center1_x-cetner2_x)+(center1_y-center2_y)*(center1_y-center2_y))
