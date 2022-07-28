@@ -20,7 +20,7 @@ from distance import convex_hull_iou, euclidea_distance
 np.random.seed(0)
 
 # visualization for 5 classes
-COLOR = ("red","green","black","orange","purple")
+COLOR = ("red","green","black","orange","purple", "blue", "yellow", "cyan", "magenta")
 CLASS = ("Car", "Pedestrian", "Pedestrian Group", "Two Wheeler", "Large Vehicle")
 
 
@@ -258,7 +258,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
-    parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='train')
+    parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
                         type=int, default=1)
@@ -280,7 +280,7 @@ if __name__ == '__main__':
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentAllFrames.npy')
+  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -292,32 +292,47 @@ if __name__ == '__main__':
     ax1 = fig.add_subplot(111, aspect='equal')
     # fig.axis('off')
   for frame_idx, frame in enumerate(sequence_segments.item().values()):  
-    clusters = [instance['points'] for instance in frame.values()]
-    class_ids = [instance['class_ID'] for instance in frame.values()]
+    print(frame_idx)
+    if frame != []:
+      clusters = [instance['points'] for instance in frame.values()]
+      class_ids = [instance['class_ID'] for instance in frame.values()]
   
     # start_time = time.time()
     # trackers = mot_tracker.update(clusters, frame)
     # cycle_time = time.time() - start_time
     # total_time += cycle_time
 
-    if(display):
-      # display segementor output with scatter plot
-      for idx, class_id in enumerate(class_ids):
-        x = clusters[idx][:, :, 0]
-        y = clusters[idx][:, :, 1]
-        ax1.scatter(x, y, c=COLOR[class_id], s=10)
-      ax1.set_xlabel('x/m')
-      ax1.set_ylabel('y/m')
-      ax1.set_xlim(-500, 500)
-      ax1.set_ylim(-500, 500)
-      # #plt.legend
-      # 然后用凸包的线表示tracking结果
-      # fig.canvas.draw()
-      fig.canvas.flush_events()
-      plt.show() 
-      plt.pause(.1)
-      input("Press Enter to Continue")
-      ax1.cla()
+      if(display):
+        # display segementor output with scatter plot in ego-vehicle coordinate
+        for idx, cluster in enumerate(clusters):
+          y = cluster[:, :, 0]  # x_cc
+          x = cluster[:, :, 1]  # y_cc
+          ax1.scatter(x, y, c=COLOR[idx%9], s=7)
+        ax1.set_xlabel('y_cc/m')
+        ax1.set_ylabel('x_cc/m')
+        ax1.set_xlim(50, -50)
+        ax1.set_ylim(0, 100)
+        fig.canvas.flush_events()
+        plt.show() 
+        plt.pause(.1)
+        input("Press Enter to Continue")
+        ax1.cla()
+    else:
+      if(display):
+        # display segementor output with scatter plot in ego-vehicle coordinat
+        ax1.set_xlabel('x/m')
+        ax1.set_ylabel('y/m')
+        ax1.set_xlim(-50, 50)
+        ax1.set_ylim(0, 100)
+        # #plt.legend
+        # 然后用凸包的线表示tracking结果
+        # fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.show() 
+        plt.pause(.1)
+        input("Press Enter to Continue")
+        ax1.cla()
+      pass
 
   # print("Total Tracking took: %.3f seconds for %d frames or %.1f FPS" % (total_time, frame+1, (frame+1) / total_time))
 
