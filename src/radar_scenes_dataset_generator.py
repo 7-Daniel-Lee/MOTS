@@ -21,17 +21,14 @@ import pandas as pd
 import h5py
 import json
 import numpy as np
-from typing import Union, List
-from enum import Enum
 from typing import Union
 from tqdm import tqdm
 import pickle
-from torchvision import transforms, utils
 from torch.utils.data import Dataset, DataLoader
 import torch
 
-from radar_scenes_read_json import Sequence
-from radar_scenes_labels import Label, ClassificationLabel 
+from instance_seg.radar_scenes_read_json import Sequence
+from instance_seg.radar_scenes_labels import Label, ClassificationLabel 
 
 class DataAugmentation(object):
     """
@@ -373,38 +370,36 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, non_static = F
 
     #store the generated data in pickle file
     if non_static:
-        path = str(path_to_dataset) +'/no_shuf/train_data_without_static.pickle'
+        path = str(path_to_dataset) +'/train_data_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(train_data, f)
         f.close()
 
-        path = str(path_to_dataset) +'/no_shuf/train_label_without_static.pickle'
+        path = str(path_to_dataset) +'/train_label_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(train_label, f)
         f.close()
 
-        path = str(path_to_dataset) +'/no_shuf/validation_data_without_static.pickle'
+        path = str(path_to_dataset) +'/validation_data_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(validation_data, f)
         f.close()
 
-        path = str(path_to_dataset) +'/no_shuf/validation_label_without_static.pickle'
+        path = str(path_to_dataset) +'/validation_label_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(validation_label, f)
         f.close()
 
-        path = str(path_to_dataset) + '/no_shuf/test_data_without_static.pickle'
+        path = str(path_to_dataset) + '/test_data_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(test_data, f)
         f.close()
 
-        path = str(path_to_dataset) + '/no_shuf/test_label_without_static.pickle'
+        path = str(path_to_dataset) + '/test_label_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(test_label, f)
         f.close()
-
     else:
-
         path = str(path_to_dataset) +'/train_data.pickle'
         f = open(path, 'wb')
         pickle.dump(train_data, f)
@@ -438,40 +433,6 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, non_static = F
     return train_data, validation_data, test_data, train_label, validation_label, test_label
 
 
-def get_train_data(path_to_dir, non_static=False):
-    
-    """
-    check if there are data stored in the path, if not generate data
-
-    :param path_to_dataset: path to the dataset 
-    :param non_static: indicate if we want to filter out the static points
-    
-    :return: loaded data
-    """
-
-    if non_static:
-        train_data_add = str(path_to_dir) + "/train_data_without_static.pickle"
-        train_label_add = str(path_to_dir) + "/train_label_without_static.pickle"
-    else:
-        train_data_add = str(path_to_dir) + "/train_data.pickle"
-        train_label_add = str(path_to_dir) + "/train_label.pickle"
-    
-
-    if not os.path.exists(train_data_add):
-        print("data directory is empty, calling data generator instead")
-        train_dataset, _, _, train_label, _, _ = radar_scenes_partitioned_data_generator(path_to_dir, non_static)
-
-    
-    f_train_data = open(train_data_add, 'rb')
-    train_dataset=pickle.load(f_train_data)
-    f_train_data.close()
-
-    f_train_label = open(train_label_add, 'rb')
-    train_label=pickle.load(f_train_label)
-    f_train_label.close()
-    return train_dataset, train_label
-
-
 def get_validation_data(path_to_dir, non_static=False):
     
     """
@@ -489,6 +450,11 @@ def get_validation_data(path_to_dir, non_static=False):
     else:
         validation_data_add = str(path_to_dir) + "/validation_data.pickle"
         validation_label_add = str(path_to_dir) + "/validation_label.pickle"
+
+    if not os.path.exists(validation_data_add):
+        print("data directory is empty, calling data generator instead")
+    _, validation_dataset, _, _, validation_label, _ = radar_scenes_partitioned_data_generator(path_to_dir, non_static)
+
 
     f_validation_data = open(validation_data_add, 'rb')
     validation_dataset=pickle.load(f_validation_data)
@@ -516,6 +482,10 @@ def get_test_data(path_to_dir, non_static=False):
     else:
         test_data_add = str(path_to_dir) + "/test_data.pickle"
         test_label_add = str(path_to_dir) + "/test_label.pickle"
+
+    if not os.path.exists(test_data_add):
+        print("data directory is empty, calling data generator instead")
+    _, _, test_dataset,_, _, test_label = radar_scenes_partitioned_data_generator(path_to_dir, non_static)
       
     f_test_data = open(test_data_add, 'rb')
     test_dataset = pickle.load(f_test_data)
@@ -541,60 +511,6 @@ def label_bytes2int(labels):  # 将bytes类型转化为int类型
                 labels_int[1, loc] = n
             n += 1  # 下一个编号
     return labels_int
-
-
-class Radar_Scenes_Train_Dataset(Dataset):
-    def __init__(self, datapath, transforms, sample_size, non_static):
-        '''
-        Define a class in order to interface with DataLoader
-
-        Arguments
-            - datapath: path to the Radar Scenes Dataset
-            - transformes, as defined by the FeatureTransform file
-            - sample_size, how many samples to take out from each scene
-            - non_static: do we want to filter out the non_static points
-        '''
-
-        #load data
-        train_dataset, train_label, = get_train_data(datapath, non_static)
-
-        self.train_dataset = train_dataset
-        self.train_label = train_label
-        self.transforms =  transforms
-        self.sample_size = sample_size
-
-    def __getitem__(self,frame_index):
-       
-        # get the original data
-        points = self.train_dataset[frame_index] # read out the points contained  in this frame
-        labels = self.train_label[frame_index] # read out the labels contained in this frame
-            
-        num_points = len(points) # how many points are contained in this frame
-        point_idxs = range(num_points) # generate the index
-
-        # sample a fixed length points from each frame, if sample_size == 0, use original points
-        if self.sample_size == 0:
-            selected_point_idxs = point_idxs
-        elif self.sample_size >= num_points:
-            selected_point_idxs = np.random.choice(point_idxs, self.sample_size, replace = True)
-        else:
-            selected_point_idxs = np.random.choice(point_idxs, self.sample_size, replace = False)
-            
-        selected_points = points[selected_point_idxs, :] #only take the sampled points in order to keep things of uniform size
-        selected_labels = labels[:, selected_point_idxs]
-        selected_labels = label_bytes2int(selected_labels)
-
-        #transform the selected points, augmentation
-        if self.transforms != None: 
-            selected_points = self.transforms(selected_points)
-
-        features = torch.tensor(np.stack(selected_points)).type(torch.FloatTensor)
-        label   = torch.tensor(np.stack(selected_labels)).type(torch.FloatTensor)
-            
-        return features, label
-
-    def __len__(self):
-        return len(self.train_dataset)
 
 
 class Radar_Scenes_Validation_Dataset(Dataset):
@@ -701,7 +617,6 @@ class Radar_Scenes_Test_Dataset(Dataset):
 
         features = torch.tensor(np.stack(selected_points)).type(torch.FloatTensor)
         label = torch.tensor(np.stack(selected_labels)).type(torch.FloatTensor)
-
         return features, label
 
     def __len__(self):
@@ -711,21 +626,6 @@ class Radar_Scenes_Test_Dataset(Dataset):
 if __name__ == "__main__":
     ''' dataset loading '''
     datapath = '../../RadarScenes/datashort'
-    radar_scenes_dataset = Radar_Scenes_Train_Dataset(datapath, transforms=None, sample_size=100, non_static=True)
-    trainDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=True, num_workers=4)
-
-    print("Training Data Successfully Loaded")
-
-    ''' validate Data '''
-    for idx, (features, label) in enumerate(trainDataLoader):
-        print("B is {}".format(features.size(0)))
-        print("N is {}".format(features.size(1)))
-        print("C is {}".format(features.size(2)))
-
-        print("B of label is {}".format(label.size(0)))
-        print("N of label is {}".format(label.size(1)))
-   
-    datapath = '../../RadarScenes/datashort/no_shuf'
     radar_scenes_dataset = Radar_Scenes_Test_Dataset(datapath, transforms=None, sample_size=100, non_static=True)
     testDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=True, num_workers=4)
 
