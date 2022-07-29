@@ -102,7 +102,6 @@ class FeatureEngineering(object):
         return pd.Series(features, name=framenumber)
 
 
-
 def batch_transform_3d_vector(trafo_matrix: np.ndarray, vec: np.ndarray) -> np.ndarray:
     """
     Applies a 3x3 transformation matrix to every (1,3) vector contained in vec.
@@ -189,15 +188,13 @@ def gen_timeline(sequence):
     return sequence_timeline, anchor_timeline
 
 
-def features_from_radar_data(radar_data, LSTM = False):
+def features_from_radar_data(radar_data):
     """
     generate a feature vector for each detection in radar_data.
     The spatial coordinates as well as the ego-motion compensated Doppler velocity and the RCS value are used.
     
-    :param radar_data: input data
-    :flag LSTM: if flag LSTM==true, then return timestamp information
-    
-    :return: numpy array with shape (len(radar_data), 5/4), depending on the LSTM flag, contains the feature vector for each point
+    :param radar_data: input data    
+    :return: numpy array with shape (len(radar_data), 5/4), contains the feature vector for each point
     """
     X = np.zeros((len(radar_data), 5))  # construct feature vector
     for radar_point_index in range(len(radar_data)):
@@ -206,10 +203,7 @@ def features_from_radar_data(radar_data, LSTM = False):
         X[radar_point_index][2] = radar_data[radar_point_index]["vr_compensated"] #in m/s: Radial velocity for this detection but compensated for the ego-motion
         X[radar_point_index][3] = radar_data[radar_point_index]["rcs"] #in dBsm, Radar Cross Section value of the detection
         X[radar_point_index][4] = radar_data[radar_point_index]["timestamp"] # this information is required for LSTM training, but not pointnets
-    if LSTM:
-        return X #if the LSTM flag is on, then return timestamp information
-    else:
-        return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
+    return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
 
 
 def radar_scenes_dataset(datasetdir: str):
@@ -234,7 +228,7 @@ def radar_scenes_dataset(datasetdir: str):
     return sequ
 
 
-def get_valid_points(scene, LSTM = False, non_static = False):
+def get_valid_points(scene, non_static = False):
     """
     Given a scene, filter out the clutters and outliers, only take into account the valid points
     
@@ -269,16 +263,17 @@ def get_valid_points(scene, LSTM = False, non_static = False):
         non_static_points = (y_true != 5)
         non_static_y_true = y_true[non_static_points]  # only keep the labels for valid points
         non_static_id_true = id_true[non_static_points]
-        X = features_from_radar_data(radar_data[non_static_points],LSTM) #get the features from radar_data
+        X = features_from_radar_data(radar_data[non_static_points]) #get the features from radar_data
         Y = np.row_stack((non_static_y_true, non_static_id_true))
     else:
-        X = features_from_radar_data(radar_data, LSTM)  # get the features from radar_data
+        X = features_from_radar_data(radar_data)  # get the features from radar_data
         Y = np.row_stack((y_true, id_true))
 
     return X, Y
 
+
 # synchronize data collected by four radars into the ego_coordinate as seen by the anchor radar
-def synchronize_global_coordinate_to_anchor_coordinate(frame_index: int, sequence: object, data: dict, label: dict, LSTM=False, non_static=False):
+def synchronize_global_coordinate_to_anchor_coordinate(frame_index: int, sequence: object, data: dict, label: dict, non_static=False):
     """
     Given a sequence, syncronize the four radars to generate sets of unifid points for this sequence 
     
@@ -286,7 +281,6 @@ def synchronize_global_coordinate_to_anchor_coordinate(frame_index: int, sequenc
     :param sequence: the name of the sequence we perform this syncronization with
     :param data: a dictionary to put data in
     :para label: a dictionary to put label in
-    :para LSTM: a flag to indicate if we are training for LSTM networks
     :para non_static: a flag to indicate if we want to filter out the static points, such as trees and roads 
     
     :return: frame_index, so that it can be passon and count the frames countinously from sequence to sequence
@@ -296,14 +290,14 @@ def synchronize_global_coordinate_to_anchor_coordinate(frame_index: int, sequenc
     anchor_point_count = 0
     for anchor_point in tqdm(anchor_timeline):  #synchronize all four radars based on the anchor_point  # 这里将四帧合成一帧！
         anchor_scene = sequence.get_scene(anchor_point) #get anchor_scene
-        X, Y = get_valid_points(anchor_scene, LSTM, non_static)
+        X, Y = get_valid_points(anchor_scene, non_static)
         point_count = sequence_timeline.index(anchor_point)
         for other_radar_index in range(3): #iterate the remaining 3 radars and synchronize each to that of the anchor
             if point_count+1+other_radar_index < len(sequence_timeline):
                 cur_timestamp = sequence_timeline[point_count+ 1+other_radar_index] #from anchor_point+index+1 to get tha radar number            
                 other_radar_scene = sequence.get_scene(cur_timestamp)  #get the scene from this radar
                 synchronized_scene = convert_to_anchor_coordinate(anchor_scene, other_radar_scene) #synchronize, by converting the global coordinate of radar points to that of the ego_coordinate, as speficied by the anchor radar
-                other_radar_X, other_radar_Y = get_valid_points(synchronized_scene, LSTM, non_static)
+                other_radar_X, other_radar_Y = get_valid_points(synchronized_scene, non_static)
 
             X = np.concatenate((X, other_radar_X),axis=0) #concatenate radar points to anchor radar points
             Y = np.concatenate((Y, other_radar_Y),axis=1) #concatenate labels
@@ -314,12 +308,12 @@ def synchronize_global_coordinate_to_anchor_coordinate(frame_index: int, sequenc
         anchor_point_count+=1 #increase anchor point
     return frame_index
 
-def radar_scenes_partitioned_data_generator(path_to_dataset: str, LSTM = False, non_static = False):
+
+def radar_scenes_partitioned_data_generator(path_to_dataset: str, non_static = False):
     """
     partition the datasets into training data, validation data and testing data
 
     :param path_to_dataset: path to the dataset 
-    :param LSTM flag: indicate if we want to multiple timesteps for the training
     :param non_static: indicate if we want to filter out the static points
     
     :return: the generated values
@@ -338,23 +332,21 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, LSTM = False, 
         print('Processing {} for Data'.format(sequence_name))
 
         if non_static:
-            index_post = synchronize_global_coordinate_to_anchor_coordinate(index_prior, sequ, data, label, LSTM, non_static=True)
+            index_post = synchronize_global_coordinate_to_anchor_coordinate(index_prior, sequ, data, label, non_static=True)
         else:
-            index_post = synchronize_global_coordinate_to_anchor_coordinate(index_prior, sequ, data, label, LSTM)
+            index_post = synchronize_global_coordinate_to_anchor_coordinate(index_prior, sequ, data, label)
 
         index_prior =  index_post #update frame_index
 
     train_number = int(len(data) * 0) #
     validation_number = int(len(data) * 0) #
     keys = list(range(len(data)))
-    # random.shuffle(keys)   #  comment it and regenerate the data!!! without any shuffle
     train_data = {}
     train_label = {}
     validation_data = {}
     validation_label = {}
     test_data = {}
     test_label = {}
-    # num_empty_frames = 0
     for idx, key in enumerate(keys):
         if idx < train_number:  # keys的前train_number个key对应的元素放入train_dataset
             idx_train = idx
@@ -367,11 +359,7 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, LSTM = False, 
         else:  # keys剩下的key对应的元素放入test_dataset
             idx_test = idx - train_number - validation_number
             test_data[idx_test] = data[key]
-            # if len(data[key]) == 0:
-            #     print('frame id', idx_test, 'is empty')
-            #     num_empty_frames += 1
             test_label[idx_test] = label[key]
-    # print(num_empty_frames/idx_test)
 
     assert list(train_data.keys()) == list(range(len(train_data)))
     assert list(validation_data.keys()) == list(range(len(validation_data)))
@@ -385,33 +373,32 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, LSTM = False, 
 
     #store the generated data in pickle file
     if non_static:
-
-        path = str(path_to_dataset) +'/no_shuffle/train_data_without_static.pickle'
+        path = str(path_to_dataset) +'/no_shuf/train_data_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(train_data, f)
         f.close()
 
-        path = str(path_to_dataset) +'/no_shuffle/train_label_without_static.pickle'
+        path = str(path_to_dataset) +'/no_shuf/train_label_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(train_label, f)
         f.close()
 
-        path = str(path_to_dataset) +'/no_shuffle/validation_data_without_static.pickle'
+        path = str(path_to_dataset) +'/no_shuf/validation_data_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(validation_data, f)
         f.close()
 
-        path = str(path_to_dataset) +'/no_shuffle/validation_label_without_static.pickle'
+        path = str(path_to_dataset) +'/no_shuf/validation_label_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(validation_label, f)
         f.close()
 
-        path = str(path_to_dataset) + '/no_shuffle/test_data_without_static.pickle'
+        path = str(path_to_dataset) + '/no_shuf/test_data_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(test_data, f)
         f.close()
 
-        path = str(path_to_dataset) + '/no_shuffle/test_label_without_static.pickle'
+        path = str(path_to_dataset) + '/no_shuf/test_label_without_static.pickle'
         f = open(path, 'wb')
         pickle.dump(test_label, f)
         f.close()
@@ -450,40 +437,30 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, LSTM = False, 
 
     return train_data, validation_data, test_data, train_label, validation_label, test_label
 
-def get_train_data(path_to_dir, LSTM=False, non_static=False, multiframe=False):
+
+def get_train_data(path_to_dir, non_static=False):
     
     """
     check if there are data stored in the path, if not generate data
 
     :param path_to_dataset: path to the dataset 
-    :param LSTM flag: indicate if we want to multiple timesteps for the training
     :param non_static: indicate if we want to filter out the static points
     
     :return: loaded data
     """
 
-    if non_static and (not multiframe):
+    if non_static:
         train_data_add = str(path_to_dir) + "/train_data_without_static.pickle"
         train_label_add = str(path_to_dir) + "/train_label_without_static.pickle"
-    elif non_static and multiframe:
-        train_data_add = str(path_to_dir) + "/multiframe_train_data_without_static.pickle"
-        train_label_add = str(path_to_dir) + "/multiframe_train_label_without_static.pickle"
-        train_frame_info_add = str(path_to_dir) + "/multiframe_train_frame_info_without_static.pickle"
-    elif (not non_static) and (not multiframe):
+    else:
         train_data_add = str(path_to_dir) + "/train_data.pickle"
         train_label_add = str(path_to_dir) + "/train_label.pickle"
-    else:  # (not non_static) and multiframe
-        train_data_add = str(path_to_dir) + "/multiframe_train_data.pickle"
-        train_label_add = str(path_to_dir) + "/multiframe_train_label.pickle"
-        train_frame_info_add = str(path_to_dir) + "/multiframe_train_frame_info.pickle"
+    
 
     if not os.path.exists(train_data_add):
         print("data directory is empty, calling data generator instead")
-        if multiframe == False:
-            train_dataset, _, _, train_label, _, _ = radar_scenes_partitioned_data_generator(path_to_dir, LSTM, non_static)
-        else:
-            train_dataset, _, _, train_label, _, _, train_frame_info, _, _ = radar_scenes_partitioned_data_generator_for_models_using_multiframe(
-                path_to_dir, LSTM, non_static)
+        train_dataset, _, _, train_label, _, _ = radar_scenes_partitioned_data_generator(path_to_dir, non_static)
+
     
     f_train_data = open(train_data_add, 'rb')
     train_dataset=pickle.load(f_train_data)
@@ -492,41 +469,26 @@ def get_train_data(path_to_dir, LSTM=False, non_static=False, multiframe=False):
     f_train_label = open(train_label_add, 'rb')
     train_label=pickle.load(f_train_label)
     f_train_label.close()
-
-    if multiframe == True:
-        f_train_frame_info = open(train_frame_info_add, 'rb')
-        train_frame_info = pickle.load(f_train_frame_info)
-        f_train_frame_info.close()
-        return train_dataset, train_label, train_frame_info
-
     return train_dataset, train_label
 
-def get_validation_data(path_to_dir, LSTM=False, non_static=False, multiframe=False):
+
+def get_validation_data(path_to_dir, non_static=False):
     
     """
     check if there are data stored in the path, if not generate data
 
     :param path_to_dataset: path to the dataset 
-    :param LSTM flag: indicate if we want to multiple timesteps for the training
     :param non_static: indicate if we want to filter out the static points
     
     :return: loaded data
     """
 
-    if non_static and (not multiframe):
+    if non_static:
         validation_data_add = str(path_to_dir) + "/validation_data_without_static.pickle"
         validation_label_add = str(path_to_dir) + "/validation_label_without_static.pickle"
-    elif non_static and multiframe:
-        validation_data_add = str(path_to_dir) + "/multiframe_validation_data_without_static.pickle"
-        validation_label_add = str(path_to_dir) + "/multiframe_validation_label_without_static.pickle"
-        validation_frame_info_add = str(path_to_dir) + "/multiframe_validation_frame_info_without_static.pickle"
-    elif (not non_static) and (not multiframe):
+    else:
         validation_data_add = str(path_to_dir) + "/validation_data.pickle"
         validation_label_add = str(path_to_dir) + "/validation_label.pickle"
-    else:  # (not non_static) and multiframe
-        validation_data_add = str(path_to_dir) + "/multiframe_validation_data.pickle"
-        validation_label_add = str(path_to_dir) + "/multiframe_validation_label.pickle"
-        validation_frame_info_add = str(path_to_dir) + "/multiframe_validation_frame_info.pickle"
 
     f_validation_data = open(validation_data_add, 'rb')
     validation_dataset=pickle.load(f_validation_data)
@@ -536,40 +498,25 @@ def get_validation_data(path_to_dir, LSTM=False, non_static=False, multiframe=Fa
     validation_label =pickle.load(f_validation_label)
     f_validation_label.close()
 
-    if multiframe == True:
-        f_validation_frame_info = open(validation_frame_info_add, 'rb')
-        validation_frame_info = pickle.load(f_validation_frame_info)
-        f_validation_frame_info.close()
-
-        return validation_dataset, validation_label, validation_frame_info
-
     return validation_dataset ,  validation_label
 
-def get_test_data(path_to_dir, LSTM=False, non_static=False, multiframe=False):
+
+def get_test_data(path_to_dir, non_static=False):
     """
     check if there are data stored in the path, if not generate data
     :param:
         path_to_dataset: path to the dataset
-        LSTM flag: indicate if we want to multiple timesteps for the training
         non_static: indicate if we want to filter out the static points
     :return:
         loaded data
     """
-    if non_static and (not multiframe):
+    if non_static:
         test_data_add = str(path_to_dir) + "/test_data_without_static.pickle"
         test_label_add = str(path_to_dir) + "/test_label_without_static.pickle"
-    elif non_static and multiframe:
-        test_data_add = str(path_to_dir) + "/multiframe_test_data_without_static.pickle"
-        test_label_add = str(path_to_dir) + "/multiframe_test_label_without_static.pickle"
-        test_frame_info_add = str(path_to_dir) + "/multiframe_test_frame_info_without_static.pickle"
-    elif (not non_static) and (not multiframe):
+    else:
         test_data_add = str(path_to_dir) + "/test_data.pickle"
         test_label_add = str(path_to_dir) + "/test_label.pickle"
-    else:  # (not non_static) and multiframe
-        test_data_add = str(path_to_dir) + "/multiframe_test_data.pickle"
-        test_label_add = str(path_to_dir) + "/multiframe_test_label.pickle"
-        test_frame_info_add = str(path_to_dir) + "/multiframe_test_frame_info.pickle"
-
+      
     f_test_data = open(test_data_add, 'rb')
     test_dataset = pickle.load(f_test_data)
     f_test_data.close()
@@ -578,14 +525,8 @@ def get_test_data(path_to_dir, LSTM=False, non_static=False, multiframe=False):
     test_label = pickle.load(f_test_label)
     f_test_label.close()
 
-    if multiframe == True:
-        f_test_frame_info = open(test_frame_info_add, 'rb')
-        test_frame_info = pickle.load(f_test_frame_info)
-        f_test_frame_info.close()
-
-        return test_dataset, test_label, test_frame_info
-
     return test_dataset, test_label
+
 
 def label_bytes2int(labels):  # 将bytes类型转化为int类型
     labels_int = np.zeros(labels.shape) - 1  # 初始化为全-1的矩阵
@@ -601,8 +542,9 @@ def label_bytes2int(labels):  # 将bytes类型转化为int类型
             n += 1  # 下一个编号
     return labels_int
 
+
 class Radar_Scenes_Train_Dataset(Dataset):
-    def __init__(self, datapath, transforms, sample_size, LSTM, non_static, multiframe=False):
+    def __init__(self, datapath, transforms, sample_size, non_static):
         '''
         Define a class in order to interface with DataLoader
 
@@ -610,23 +552,16 @@ class Radar_Scenes_Train_Dataset(Dataset):
             - datapath: path to the Radar Scenes Dataset
             - transformes, as defined by the FeatureTransform file
             - sample_size, how many samples to take out from each scene
-            - LSTM: wheather or not this is for the LSTM training
             - non_static: do we want to filter out the non_static points
         '''
 
         #load data
-        if multiframe == False:
-            train_dataset, train_label, = get_train_data(datapath, LSTM, non_static, multiframe)
-        else:
-            train_dataset, train_label, train_frame_info, = get_train_data(datapath, LSTM, non_static, multiframe)
-            self.train_frame_info = train_frame_info
+        train_dataset, train_label, = get_train_data(datapath, non_static)
 
-        self.multiframe = multiframe
         self.train_dataset = train_dataset
         self.train_label = train_label
         self.transforms =  transforms
         self.sample_size = sample_size
-
 
     def __getitem__(self,frame_index):
        
@@ -655,18 +590,15 @@ class Radar_Scenes_Train_Dataset(Dataset):
 
         features = torch.tensor(np.stack(selected_points)).type(torch.FloatTensor)
         label   = torch.tensor(np.stack(selected_labels)).type(torch.FloatTensor)
-
-        if self.multiframe == True:
-            frame_info = self.train_frame_info[frame_index]  # read out the frame info contained in this frame
-            return features, label, frame_info
             
         return features, label
 
     def __len__(self):
         return len(self.train_dataset)
 
+
 class Radar_Scenes_Validation_Dataset(Dataset):
-    def __init__(self, datapath, transforms, sample_size, LSTM, non_static, multiframe=False):
+    def __init__(self, datapath, transforms, sample_size, non_static):
         '''
         Define a class in order to interface with DataLoader
 
@@ -674,18 +606,12 @@ class Radar_Scenes_Validation_Dataset(Dataset):
             - datapath: path to the Radar Scenes Dataset
             - transformes, as defined by the FeatureTransform file
             - sample_size, how many samples to take out from each scene
-            - LSTM: wheather or not this is for the LSTM training
             - non_static: do we want to filter out the non_static points
         '''
 
         #load data
-        if multiframe == False:
-            validation_dataset, validation_label, = get_validation_data(datapath, LSTM, non_static, multiframe)
-        else:
-            validation_dataset, validation_label, validation_frame_info, = get_validation_data(datapath, LSTM, non_static, multiframe)
-            self.validation_frame_info = validation_frame_info
+        validation_dataset, validation_label, = get_validation_data(datapath, non_static)
 
-        self.multiframe = multiframe
         self.validation_dataset = validation_dataset
         self.validation_label = validation_label
         self.transforms =  transforms
@@ -720,35 +646,26 @@ class Radar_Scenes_Validation_Dataset(Dataset):
         features = torch.tensor(np.stack(selected_points)).type(torch.FloatTensor)
         label   = torch.tensor(np.stack(selected_labels)).type(torch.FloatTensor)
 
-        if self.multiframe == True:
-            frame_info = self.validation_frame_info[frame_index]  # read out the frame info contained in this frame
-            return features, label, frame_info
-
         return features, label
 
     def __len__(self):
         return len(self.validation_dataset)
 
+
 class Radar_Scenes_Test_Dataset(Dataset):
-    def __init__(self, datapath, transforms, sample_size, LSTM, non_static, multiframe=False):
+    def __init__(self, datapath, transforms, sample_size, non_static):
         '''
         Define a class in order to interface with DataLoader
         :param:
             - datapath: path to the Radar Scenes Dataset
             - transformes, as defined by the FeatureTransform file
             - sample_size, how many samples to take out from each scene. If sample_size == 0, use the original points
-            - LSTM: whether or not this is for the LSTM training
             - non_static: do we want to filter out the non_static points
         '''
 
         # load data
-        if multiframe == False:
-            test_dataset, test_label, = get_test_data(datapath, LSTM, non_static, multiframe)
-        else:
-            test_dataset, test_label, test_frame_info, = get_test_data(datapath, LSTM, non_static, multiframe)
-            self.test_frame_info = test_frame_info
-
-        self.multiframe = multiframe
+        test_dataset, test_label, = get_test_data(datapath, non_static)
+        
         self.test_dataset = test_dataset
         self.test_label = test_label
         self.transforms = transforms
@@ -785,62 +702,39 @@ class Radar_Scenes_Test_Dataset(Dataset):
         features = torch.tensor(np.stack(selected_points)).type(torch.FloatTensor)
         label = torch.tensor(np.stack(selected_labels)).type(torch.FloatTensor)
 
-        if self.multiframe == True:
-            frame_info = self.test_frame_info[frame_index]  # read out the frame info contained in this frame
-            return features, label, frame_info
-
         return features, label
 
     def __len__(self):
         return len(self.test_dataset)
 
+
 if __name__ == "__main__":
     ''' dataset loading '''
     datapath = '../../RadarScenes/datashort'
-    multiframe = False
-    radar_scenes_dataset = Radar_Scenes_Train_Dataset(datapath, transforms=None, sample_size=100, LSTM=False, non_static=True, multiframe=multiframe)
+    radar_scenes_dataset = Radar_Scenes_Train_Dataset(datapath, transforms=None, sample_size=100, non_static=True)
     trainDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=True, num_workers=4)
 
     print("Training Data Successfully Loaded")
 
     ''' validate Data '''
-    if multiframe == False:
-        for idx, (features, label) in enumerate(trainDataLoader):
-            print("B is {}".format(features.size(0)))
-            print("N is {}".format(features.size(1)))
-            print("C is {}".format(features.size(2)))
+    for idx, (features, label) in enumerate(trainDataLoader):
+        print("B is {}".format(features.size(0)))
+        print("N is {}".format(features.size(1)))
+        print("C is {}".format(features.size(2)))
 
-            print("B of label is {}".format(label.size(0)))
-            print("N of label is {}".format(label.size(1)))
-    else:
-        for idx, (features, label, frame_info) in enumerate(trainDataLoader):
-            print("B is {}".format(features.size(0)))
-            print("N is {}".format(features.size(1)))
-            print("C is {}".format(features.size(2)))
+        print("B of label is {}".format(label.size(0)))
+        print("N of label is {}".format(label.size(1)))
+   
+    datapath = '../../RadarScenes/datashort/no_shuf'
+    radar_scenes_dataset = Radar_Scenes_Test_Dataset(datapath, transforms=None, sample_size=100, non_static=True)
+    testDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=True, num_workers=4)
 
-            print("B of label is {}".format(label.size(0)))
-            print("N of label is {}".format(label.size(1)))
-    # datapath = '../../RadarScenes/datashort/data_short'
-    # multiframe = False
-    # radar_scenes_dataset = Radar_Scenes_Test_Dataset(datapath, transforms=None, sample_size=100, LSTM=False, non_static=True, multiframe=multiframe)
-    # testDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=True, num_workers=4)
+    print("Training Data Successfully Loaded")
 
-    # print("Training Data Successfully Loaded")
-
-    # ''' validate Data '''
-    # if multiframe == False:
-    #     num_empty_frames = 0
-    #     for idx, (features, label) in enumerate(testDataLoader):
-    #         if features.numel() == 1:
-    #             print('frame id', idx, 'is empty')
-    #             num_empty_frames += 1
-    #     print(num_empty_frames/idx)
-    # else:
-    #     for idx, (features, label, frame_info) in enumerate(testDataLoader):
-    #         print("B is {}".format(features.size(0)))
-    #         print("N is {}".format(features.size(1)))
-    #         print("C is {}".format(features.size(2)))
-
-    #         print("B of label is {}".format(label.size(0)))
-    #         print("N of label is {}".format(label.size(1)))
-
+    ''' validate Data '''
+    num_empty_frames = 0
+    for idx, (features, label) in enumerate(testDataLoader):
+        if features.numel() == 1:
+            print('frame id', idx, 'is empty')
+            num_empty_frames += 1
+    print("{}%% frames in the test set is empty".format(100*num_empty_frames/idx))

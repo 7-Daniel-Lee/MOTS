@@ -272,8 +272,7 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  # display = args.display
-  display = True
+  display = args.display
   phase = args.phase
   total_time = 0.0
 
