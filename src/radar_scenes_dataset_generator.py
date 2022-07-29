@@ -31,7 +31,6 @@ import torch
 from instance_seg.radar_scenes_read_json import Sequence
 from instance_seg.radar_scenes_labels import Label, ClassificationLabel 
 
-
 class DataAugmentation(object):
     """
     add noise to original data
