@@ -4,19 +4,13 @@ import numpy as np
 import torch
 from sklearn.cluster import DBSCAN
 from tqdm import tqdm
-# from clustering.EDBSCAN import EDBSCAN
-# from clustering.SRVDBSCAN import SRV_DBSCAN
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
-from pointnet2_sem_seg import get_pointnet2_for_semantic_segmentation_model, get_gmlp_based_pointnet2_for_semantic_segmentation_model,\
+from instance_seg.pointnet2_sem_seg import get_pointnet2_for_semantic_segmentation_model, get_gmlp_based_pointnet2_for_semantic_segmentation_model,\
     get_external_attention_based_pointnet2_for_semantic_segmentation_model
-#    , get_self_attention_based_pointnet2_for_semantic_segmentation_model
-#from model.pointnet2_ins_seg import get_pointnet2_for_instance_segmentation_model, get_gmlp_based_pointnet2_for_instance_segmentation_model
-# from utils.network_validation import group_proposals_generation_and_merging
 from radar_scenes_dataset_generator import Radar_Scenes_Test_Dataset
-import train_pointnets_for_semantic_segmentation_radar_scenes
-# import train_pointnets_for_instance_segmentation_radar_scenes
-#from train_random_forest import ExtractFeatures
+import instance_seg.train_pointnets_for_semantic_segmentation_radar_scenes
+
 
 '''
 %% ----------------------------------- Run different approaches to implement instance segmentation for radar detection points ------------------------------ %%
