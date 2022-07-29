@@ -1,5 +1,5 @@
 # Data Pipeline
-1. Generate filterd data (remove outliers and static points) and save the validation set and the test set in .pickel 
+1. Generate filterd data (remove outliers and static points) and save the validation set and the test set in `validation_data_without_static.pickle`, `validation_label_without_static.pickle`, `test_data_without_static.pickle`, `test_label_without_static.pickle`
 ```
 export PYTHONPATH=.
 python src/radar_scenes_dataset_generator.py
