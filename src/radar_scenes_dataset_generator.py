@@ -642,9 +642,9 @@ if __name__ == "__main__":
     args = parse_args()
     
     radar_scenes_dataset = Radar_Scenes_Validation_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
-    ValidationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
+    validationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
     num_empty_frames = 0
-    for idx, (features, label) in enumerate(ValidationDataLoader):
+    for idx, (features, label) in enumerate(validationDataLoader):
         if features.numel() == 1:
             print('frame id', idx, 'is empty')
             num_empty_frames += 1
