@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from skimage import io
-
+from tqdm import tqdm
 import time
 import argparse
 from filterpy.kalman import KalmanFilter
@@ -214,8 +214,7 @@ class Sort(object):
     NOTE: The number of objects returned may differ from the number of detections provided.
     """
     self.frame_count += 1
-    # get predicted locations from existing trackers, associate the detections with predictions
-    #trks = np.zeros((len(self.trackers), 5))  
+    # get predicted locations from existing trackers, associate the detections with predictions  
     trks = []  
     to_del = []
     ret = []
@@ -256,7 +255,7 @@ class Sort(object):
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='SORT demo')
-    parser.add_argument('--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
+    parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
@@ -290,8 +289,7 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax1 = fig.add_subplot(111, aspect='equal')
     # fig.axis('off')
-  for frame_idx, frame in enumerate(sequence_segments.item().values()):  
-    print(frame_idx)
+  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     if frame != []:
       clusters = [instance['points'] for instance in frame.values()]
       class_ids = [instance['class_ID'] for instance in frame.values()]
@@ -300,6 +298,7 @@ if __name__ == '__main__':
     # trackers = mot_tracker.update(clusters, frame)
     # cycle_time = time.time() - start_time
     # total_time += cycle_time
+    # 空的frame该怎么办？
 
       if(display):
         # display segementor output with scatter plot in ego-vehicle coordinate
@@ -314,7 +313,7 @@ if __name__ == '__main__':
         fig.canvas.flush_events()
         plt.show() 
         plt.pause(.1)
-        input("Press Enter to Continue")
+        # input("Press Enter to Continue")
         ax1.cla()
     else:
       if(display):
@@ -329,7 +328,7 @@ if __name__ == '__main__':
         fig.canvas.flush_events()
         plt.show() 
         plt.pause(.1)
-        input("Press Enter to Continue")
+        # input("Press Enter to Continue")
         ax1.cla()
       pass
 

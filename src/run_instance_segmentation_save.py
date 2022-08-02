@@ -6,10 +6,10 @@ from sklearn.cluster import DBSCAN
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
+from instance_seg.train_pointnets_for_semantic_segmentation_radar_scenes import parse_args
 from instance_seg.pointnet2_sem_seg import get_pointnet2_for_semantic_segmentation_model, get_gmlp_based_pointnet2_for_semantic_segmentation_model,\
     get_external_attention_based_pointnet2_for_semantic_segmentation_model
-from radar_scenes_dataset_generator import Radar_Scenes_Test_Dataset
-import instance_seg.train_pointnets_for_semantic_segmentation_radar_scenes
+from src.radar_scenes_val_test_generator import Radar_Scenes_Test_Dataset
 
 
 '''
@@ -170,20 +170,24 @@ def mAP_for_clustering_with_semantic_information(label, pred_label, pred_instanc
 def pretrained_pointnet2_for_semantic_segmentation_model(model, dataLoader, dataset_D, device):
     for duplicated_detection_points, label in dataLoader:
         # print(duplicated_detection_points[0, :20, :])
-        with torch.no_grad():
-            duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, C, N]
-            duplicated_detection_points = duplicated_detection_points.float().to(device)
-            detection_points_semantic_segmentor = model.eval()  # Put network in evaluation mode
-            pred_label, pred_center_shift_vectors = detection_points_semantic_segmentor(duplicated_detection_points, dataset_D)
-            # Run the "trained detection_points_semantic_segmentor model" and get the predicted log_softmax and center shift vectors
-            # value of each of classes for batch_size frames. pred:[batch_size, num_class]
-            pred_class = pred_label.max(2)[1]  # Get indices of the maximum log_softmax value, which will be used as predicted class
-            conf_score = pred_label.max(2)[0]  # Get the maximum log_softmax value, which will be used for mAP calculation
-            duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, N, C]
-            # print(duplicated_detection_points.shape, label.shape, pred.shape)  # label:[B, 2, N] pred:[1, N]
-            pred_label = np.row_stack((pred_class, conf_score)).reshape((1, 2, -1))  # 与label保持结构一致
-            duplicated_detection_points_with_semantic_information = (duplicated_detection_points, label, pred_label, pred_center_shift_vectors)
-            yield duplicated_detection_points_with_semantic_information
+        if duplicated_detection_points.numel() == 1:
+            yield None
+        else:
+            with torch.no_grad():
+                duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, C, N]
+                duplicated_detection_points = duplicated_detection_points.float().to(device)
+                detection_points_semantic_segmentor = model.eval()  # Put network in evaluation mode
+                pred_label, pred_center_shift_vectors = detection_points_semantic_segmentor(duplicated_detection_points, dataset_D)
+                # Run the "trained detection_points_semantic_segmentor model" and get the predicted log_softmax and center shift vectors
+                # value of each of classes for batch_size frames. pred:[batch_size, num_class]
+                pred_class = pred_label.max(2)[1]  # Get indices of the maximum log_softmax value, which will be used as predicted class
+                conf_score = pred_label.max(2)[0]  # Get the maximum log_softmax value, which will be used for mAP calculation
+                duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, N, C]
+                # print(duplicated_detection_points.shape, label.shape, pred.shape)  # label:[B, 2, N] pred:[1, N]
+                pred_label = np.row_stack((pred_class, conf_score)).reshape((1, 2, -1))  # 与label保持结构一致
+                duplicated_detection_points_with_semantic_information = (duplicated_detection_points, label, pred_label, pred_center_shift_vectors)
+                yield duplicated_detection_points_with_semantic_information
+
 
 
 # Remove all the duplicate detection points with semantic information
@@ -212,13 +216,12 @@ if __name__ == '__main__':
     2nd approach for radar detection points instance segmentation: Apply pretrained PointNet++ for points semantic segmentation first, then run different DBSCAN 
     based clustering algorithms on radar detection points.
     """
-    args = train_pointnets_for_semantic_segmentation_radar_scenes.parse_args()
-    radar_scenes_test_dataset_duplicated_detection_points = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=200,
-                                                                                    LSTM=False, non_static=True)
+    args = parse_args()
+    radar_scenes_test_dataset_duplicated_detection_points = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=200, non_static=True)
     duplicated_detection_points_dataloader = DataLoader(radar_scenes_test_dataset_duplicated_detection_points, batch_size=1,
                                                         shuffle=False, num_workers=0)
 
-    saveloadpath = 'trained_models/pointnet2_semantic_segmentation_validation2_semantic_segmentation9.9.pth'
+    saveloadpath = 'trained_models/sem_seg.pth'
 
     # 使用和训练时相同的网络参数
     device = torch.device("cuda" if args.cuda else "cpu")
@@ -228,7 +231,6 @@ if __name__ == '__main__':
                                       args.dataset_C, args.first_layer_npoint, args.first_layer_radius, args.first_layer_nsample,
                                       args.second_layer_npoint, args.second_layer_radius, args.second_layer_nsample,
                                       args.turn_on_light_weighted_network_model_using_group_conv)
-        print(123456789)
     elif args.model_configuration == 'Self_Attention_based_Pointnet2_for_Semantic_Segmentation':
         # detection_points_semantic_segmentor = get_self_attention_based_pointnet2_for_semantic_segmentation_model(args.numclasses, args.dataset_D,
         #                               args.dataset_C, args.first_layer_npoint, args.first_layer_radius, args.first_layer_nsample,
@@ -261,38 +263,41 @@ if __name__ == '__main__':
     frames = {}
     for duplicated_detection_points_with_semantic_information in tqdm(duplicated_detection_points_with_semantic_information_for_all_frames,
                                                                       total=len(duplicated_detection_points_dataloader)):
-        detection_points_with_semantic_information = remove_duplication_detection_points_with_semantic_information(duplicated_detection_points_with_semantic_information)
-        detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information
-        illustration_points(detection_points)
-        eps_list = [2.5, 1, 2, 2, 7]
-        minpts_list = [1, 1, 1, 1, 2]
-        instances = {}  # keys: instance_id; values: dictionary of all the points and class_id
-        start_ins_id = 0
-        for class_id in range(args.numclasses):
-            mask = pred_label[0, 0, :] == class_id
-            if not mask.any():
-                continue
-            features_class = detection_points[0][mask]  # 属于该类别的点
-            features_shift_class = pred_center_shift_vectors[0][mask]  # 属于该类别的点的center shift vectors
-            if args.estimate_center_shift_vectors == True:
-                # Use estimated center shift vector of each point to "push" the point torwards the geometry center of groundtruth instance points group, if args.estimate_center_shift_vectors == True. 
-                # The points belong to same instance after such adjustment will be closer to each other thus easier to be clustered.
-                # See more info of this idea in section 3.1. of paper: 2021.Hierarchical Aggregation for 3D Instance Segmentation.
-                pred_class = DBSCAN(eps=eps_list[class_id], min_samples=minpts_list[class_id]).fit_predict(
-                                                                                features_class[:, :2] + features_shift_class[:, :2])
-            else:
-                pred_class = DBSCAN(eps=eps_list[class_id], min_samples=minpts_list[class_id]).fit_predict(features_class[:, :2])
-            # Only using position info for DBSCAN.
-            pred_class += 1
-            # iterate over instance ID of the class
-            for ins_id_class in range(1, max(pred_class)+1):
-                # generate instance ID of the frame
-                ins_id = ins_id_class + start_ins_id - 1
-                # extract all the points of that instance ID
-                idx = np.where(pred_class == ins_id_class)  
-                instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :]}
-            start_ins_id = max(pred_class)
+        if duplicated_detection_points_with_semantic_information is None:
+            instances = []
+        else:
+            detection_points_with_semantic_information = remove_duplication_detection_points_with_semantic_information(duplicated_detection_points_with_semantic_information)
+            detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information
+            # illustration_points(detection_points)
+            eps_list = [2.5, 1, 2, 2, 7]
+            minpts_list = [1, 1, 1, 1, 2]
+            instances = {}  # keys: instance_id; values: dictionary of all the points and class_id
+            start_ins_id = 0
+            for class_id in range(args.numclasses):
+                mask = pred_label[0, 0, :] == class_id
+                if not mask.any():
+                    continue
+                features_class = detection_points[0][mask]  # 属于该类别的点
+                features_shift_class = pred_center_shift_vectors[0][mask]  # 属于该类别的点的center shift vectors
+                if args.estimate_center_shift_vectors == True:
+                    # Use estimated center shift vector of each point to "push" the point torwards the geometry center of groundtruth instance points group, if args.estimate_center_shift_vectors == True. 
+                    # The points belong to same instance after such adjustment will be closer to each other thus easier to be clustered.
+                    # See more info of this idea in section 3.1. of paper: 2021.Hierarchical Aggregation for 3D Instance Segmentation.
+                    pred_class = DBSCAN(eps=eps_list[class_id], min_samples=minpts_list[class_id]).fit_predict(
+                                                                                    features_class[:, :2] + features_shift_class[:, :2])
+                else:
+                    pred_class = DBSCAN(eps=eps_list[class_id], min_samples=minpts_list[class_id]).fit_predict(features_class[:, :2])
+                # Only using position info for DBSCAN.
+                pred_class += 1
+                # iterate over instance ID of the class
+                for ins_id_class in range(1, max(pred_class)+1):
+                    # generate instance ID of the frame
+                    ins_id = ins_id_class + start_ins_id - 1
+                    # extract all the points of that instance ID
+                    idx = np.where(pred_class == ins_id_class)  
+                    instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :]}
+                start_ins_id = max(pred_class)
         frames[frame_id] = instances
         frame_id += 1 
     # write to file
-    np.save('data/SegmentAllFrames.npy', frames)
+    np.save('data/SegmentSeq109.npy', frames)
