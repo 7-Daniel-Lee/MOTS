@@ -92,6 +92,10 @@ a.3). lane estimation以及drivable area estimation如何在可能没有groundtr
 
 3). 以上1). 2). 都是用匈牙利算法实现GNN for data association + rule based track management，可是对于radar数据很可能用JPDA + rule based track management或者JIPDA效果会更好。所以可以考虑用JPDA + rule based track management或者JIPDA替换1). 2).中的GNN for data association + rule based track management。
 
+* 关于用Kalman filter时候的速度状态估计：a). 速度作为一个被估计的状态，直接用Kalman filter估计速度。 b). 直接用measured Doppler径向速度作为估计的速度。 c). 用Kalman filter估计法向速度，measured Doppler作为径向速度，平方和开根作为估计的速度。
+
+* 关于instance level data association的可能方案：a). 用Cluster的中心点和predicted track中心点的欧式距离做cost做GNN。 b). clusters分成小于2个点和多于2个点的，对于多于2个点的用IOU做cost先做GNN，然后再对小于2个点的用欧式距离再做一次GNN。
+
 
 SORT
 =====
