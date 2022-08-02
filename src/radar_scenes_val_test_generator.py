@@ -290,7 +290,7 @@ def synchronize_global_coordinate_to_anchor_coordinate(frame_index: int, sequenc
     for anchor_point in tqdm(anchor_timeline):  #synchronize all four radars based on the anchor_point  # 这里将四帧合成一帧！
         anchor_scene = sequence.get_scene(anchor_point) #get anchor_scene
         X, Y = get_valid_points(anchor_scene, non_static)
-        point_count = sequence_timeline.index(anchor_point)  
+        point_count = sequence_timeline.index(anchor_point) #represent the index of anchor point in the regular time sequence, rather than in the anchor sequence. 
         for other_radar_index in range(3): #iterate the remaining 3 radars and synchronize each to that of the anchor
             if point_count+1+other_radar_index < len(sequence_timeline):
                 cur_timestamp = sequence_timeline[point_count+ 1+other_radar_index] #from anchor_point+index+1 to get tha radar number            
