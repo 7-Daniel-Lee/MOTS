@@ -12,8 +12,9 @@ def convex_hull_iou(gnd_instance:ndarray, seg_instance:ndarray)->float:
            gnd_instance: segment clusters with M rows, each row <x,y, rcs, vr>
     return: convex hull iou
     '''
-    poly1 = Polygon(gnd_instance[:, :2]).convex_hull
-    poly2 = Polygon(seg_instance[:, :2]).convex_hull
+    # 如果只有一个点就用正负1得到一个很小的凸包，合适吗？
+    poly1 = Polygon(gnd_instance[:, :, :2].squeeze()).convex_hull # 如果只有一个点无法形成凸包？？？
+    poly2 = Polygon(seg_instance[:, :, :2].squeeze()).convex_hull
     if not poly1.intersects(poly2): 
        return 0
     else:
@@ -29,5 +30,5 @@ def convex_hull_iou(gnd_instance:ndarray, seg_instance:ndarray)->float:
     return iou
 
 
-def euclidea_distance(center1_x, center1_y, cetner2_x, center2_y)->float:
+def euclidean_distance(center1_x, center1_y, cetner2_x, center2_y)->float:
        return sqrt((center1_x-cetner2_x)*(center1_x-cetner2_x)+(center1_y-center2_y)*(center1_y-center2_y))
