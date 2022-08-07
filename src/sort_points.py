@@ -306,6 +306,7 @@ if __name__ == '__main__':
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)
+        ax1.set_title('Segmentation')
     else:
       points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
 
@@ -327,9 +328,11 @@ if __name__ == '__main__':
       tracked_points = np.array(tracked_points)
       ax2.scatter(tracked_points[:, 1], tracked_points[:, 0], c='b', s=7)
       ax2.set_xlabel('y_cc/m')
-      ax2.set_ylabel('x_cc/m')
+      # ax2.set_ylabel('x_cc/m')
       ax2.set_xlim(50, -50)
       ax2.set_ylim(0, 100)
+      ax2.set_title('Tracking')
+
       fig.canvas.flush_events()
       plt.show() 
       plt.pause(.1)
