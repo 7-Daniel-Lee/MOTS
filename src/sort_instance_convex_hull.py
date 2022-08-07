@@ -25,6 +25,9 @@ CLASS = ("Car", "Pedestrian", "Pedestrian Group", "Two Wheeler", "Large Vehicle"
 
 
 def linear_assignment(cost_matrix):
+  '''
+  Hungarian algorithm to solve the MOT association problem
+  '''
   try:
     import lap
     _, x, y = lap.lapjv(cost_matrix, extend_cost=True)
@@ -35,9 +38,11 @@ def linear_assignment(cost_matrix):
     return np.array(list(zip(x, y)))
 
 
-def iou_batch(segment_instances, tracked_instances):
+def iou_batch(segment_instances:List, tracked_instances:List):
   """
-  From SORT: Computes IOU between two instances in the form [x1,y1,x2,y2]
+  From SORT: Computes IOU between two instances 
+  segment_instances:
+  tracked_instances: 
   return IOU matrix, the negative of cost matrix
   """
   num_seg = len(segment_instances) 
@@ -45,11 +50,11 @@ def iou_batch(segment_instances, tracked_instances):
   iou_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      iou_matrix[row, col] = convex_hull_iou(segment_instances[row], tracked_instances[col])
+      iou_matrix[row, col] = convex_hull_iou(segment_instances[row].numpy(), tracked_instances[col].numpy())
   return iou_matrix
 
 
-def convert_centroid_to_instance(state:np.ndarray, frame:dict)->np.ndarray:
+def convert_centroid_to_instance(state:np.ndarray, frame:dict)->dict:
   '''
   Given updated state of instance centeroid, find the closest segemented instance
   '''
@@ -124,6 +129,7 @@ class KalmanBoxTracker(object):
   def predict(self, frame):
     """
     Advances the state vector and returns the predicted bounding box estimate.
+    return: a instance, dictionary {class_id:xxx, points: ndarray}
     """
     # if((self.kf.x[6]+self.kf.x[2])<=0):   
     #   self.kf.x[6] *= 0.0
@@ -133,7 +139,7 @@ class KalmanBoxTracker(object):
       self.hit_streak = 0
     self.time_since_update += 1 # the number of prediction without update by new measurements
     self.history.append(convert_centroid_to_instance(self.kf.x, frame))
-    return self.history[-1]
+    return self.history[-1] # only return the latest prediction
 
   def get_state(self, frame):
     """
@@ -142,7 +148,7 @@ class KalmanBoxTracker(object):
     return convert_centroid_to_instance(self.kf.x, frame)
 
 
-def associate_detections_to_trackers(instances, trackers, iou_threshold = 0.3):
+def associate_detections_to_trackers(instances:List, trackers:List, iou_threshold = 0.3):
   """
   Assigns instance segmentations to tracked object (both represented as clusters)
   param trackers: trackers' predictions in this frame
@@ -204,9 +210,10 @@ class Sort(object):
     self.trackers = []
     self.frame_count = 0
 
-  def update(self, clusters:List[np.ndarray], frame):
+  def update(self, frame:dict):
     """
     Params:
+    frame: dictionary 
       clusters - a list of ndarray 
     Requires: this method must be called once for each frame even with empty detections (use np.empty((0, 5)) for frames without detections).
     Returns the a similar array, where the last column is the object ID.
@@ -219,14 +226,15 @@ class Sort(object):
     to_del = []
     ret = []
     for t in range(len(self.trackers)):
-      pred = self.trackers[t].predict(frame)
+      pred = self.trackers[t].predict(frame)['points'] # ndarray
       trks.append(pred)
-    #   if np.any(np.isnan(pos)):   # if any of the predictions is Nan, delete the tracker #？？？？ 
-    #     to_del.append(t)
-    # trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
-    # for t in reversed(to_del):
-    #   self.trackers.pop(t)
-    matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters,trks, self.iou_threshold)
+      if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
+        to_del.append(t)
+    for t in reversed(to_del):
+      self.trackers.pop(t)
+    clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
+    matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.iou_threshold)
+    # 可以分别做2次association,小于两个点的用距离，大于的用IOU
 
     # update matched trackers with assigned detections
     for m in matched:
@@ -238,11 +246,11 @@ class Sort(object):
         self.trackers.append(trk)
     i = len(self.trackers)
     for trk in reversed(self.trackers):
-        d = trk.get_state(frame)
+        d = trk.get_state(frame) 
         # rule-based track management
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
           ret.append(d)
-          # d:the current instance estimate  # 格式必须修改! 无法concatenate
+          # d:the current instance estimate, dict  # 格式必须修改! 无法concatenate
         i -= 1
         # remove dead tracklet
         if(trk.time_since_update > self.max_age):
@@ -290,16 +298,16 @@ if __name__ == '__main__':
     ax1 = fig.add_subplot(111, aspect='equal')
     # fig.axis('off')
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
+    
+    start_time = time.time()
+    trackers = mot_tracker.update(frame)
+    cycle_time = time.time() - start_time
+    total_time += cycle_time
+
     if frame != []:
       clusters = [instance['points'] for instance in frame.values()]
       class_ids = [instance['class_ID'] for instance in frame.values()]
   
-    # start_time = time.time()
-    # trackers = mot_tracker.update(clusters, frame)
-    # cycle_time = time.time() - start_time
-    # total_time += cycle_time
-    # 空的frame该怎么办？
-
       if(display):
         # display segementor output with scatter plot in ego-vehicle coordinate
         for idx, cluster in enumerate(clusters):
