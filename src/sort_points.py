@@ -5,10 +5,12 @@ from __future__ import print_function
 from cmath import nan
 
 import os
+from sys import displayhook
 from turtle import distance
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+from logging import basicConfig, DEBUG, INFO
 import matplotlib.patches as patches
 from skimage import io
 from tqdm import tqdm
@@ -52,8 +54,8 @@ def iou_batch(points:np.ndarray, pred_points:np.array)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      segment_x, segment_y = points[row, 0:3]
-      tracked_x,  tracked_y = pred_points[col, 0:3]
+      segment_x, segment_y = points[row, 0:2]
+      tracked_x,  tracked_y = pred_points[col, 0:2]
       distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
@@ -102,7 +104,7 @@ class KalmanBoxTracker(object):
     self.history = []
     self.hits += 1
     self.hit_streak += 1  # the total number of times it consecutively got matched with a detection in the last frames.
-    self.kf.update(point[:, 0:2])
+    self.kf.update(point[0:2])
 
   def predict(self):
     """
@@ -173,10 +175,6 @@ def associate_detections_to_trackers(points, trackers, distance_threshold = 0.3)
   return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def visualize_tracker():
-  return
-
-
 class Sort(object):
   def __init__(self, max_age=3, min_hits=3, distance_threshold=0.3):
     """
@@ -206,7 +204,7 @@ class Sort(object):
     ret = []
     for t, trk in enumerate(trks):
       pred = self.trackers[t].predict() # ndarray
-      trk[:] = pred
+      trk[:] = pred.squeeze()
       if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
         to_del.append(t)
     trks = np.ma.compress_rows(np.ma.masked_invalid(trks))  #  ???  
@@ -246,25 +244,30 @@ def parse_args():
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
-                        type=int, default=1)
+                        type=int, default=3)
     parser.add_argument("--min_hits", 
                         help="Minimum number of associated detections before track is initialised.", 
                         type=int, default=3)
     parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=0.3)
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose mode.')
     args = parser.parse_args()
     return args
 
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  display = args.display
-  phase = args.phase
+  if args.verbose:
+      basicConfig(level=DEBUG)
+  else:
+      basicConfig(level=INFO)
+  # display = args.display
+  display = True
   total_time = 0.0
 
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109.npy')
+  segments_path = os.path.join(args.seq_path, args.phase, 'SegmentSeq109.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -273,7 +276,8 @@ if __name__ == '__main__':
   if(display):
     plt.ion()
     fig = plt.figure()
-    ax1 = fig.add_subplot(111, aspect='equal')
+    ax1 = fig.add_subplot(121, aspect='equal')
+    ax2 = fig.add_subplot(122, aspect='equal')
     
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     if frame != []:
@@ -302,11 +306,6 @@ if __name__ == '__main__':
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)
-        fig.canvas.flush_events()
-        plt.show() 
-        plt.pause(.1)
-        # input("Press Enter to Continue")
-        ax1.cla()
     else:
       points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
 
@@ -315,23 +314,26 @@ if __name__ == '__main__':
         ax1.set_xlabel('x/m')
         ax1.set_ylabel('y/m')
         ax1.set_xlim(-50, 50)
-        ax1.set_ylim(0, 100)
-        fig.canvas.flush_events()
-        plt.show() 
-        plt.pause(.1)
-        # input("Press Enter to Continue")
-        ax1.cla()
+        ax1.set_ylim(0, 100)        
          
-  start_time = time.time()
-  trackers = mot_tracker.update(points)
-  cycle_time = time.time() - start_time
-  total_time += cycle_time
+    start_time = time.time()
+    tracked_points = mot_tracker.update(points)
+    cycle_time = time.time() - start_time
+    total_time += cycle_time
 
-  for tracked_point in trackers:
-    print('Points x:{} y:{}')
+    for tracked_point in tracked_points:
+      print('Tracked Points x:{} y:{}'.format(tracked_point[0], tracked_point[1]))
     if display:
-      # a new subplot
-      pass
-
-
-# arg parser
+      tracked_points = np.array(tracked_points)
+      ax2.scatter(tracked_points[:, 1], tracked_points[:, 0], c='b', s=7)
+      ax2.set_xlabel('y_cc/m')
+      ax2.set_ylabel('x_cc/m')
+      ax2.set_xlim(50, -50)
+      ax2.set_ylim(0, 100)
+      fig.canvas.flush_events()
+      plt.show() 
+      plt.pause(.1)
+      if args.verbose:
+        input("Press Enter to Continue")
+      ax1.cla()
+      ax2.cla()
