@@ -201,8 +201,9 @@ def features_from_radar_data(radar_data):
         X[radar_point_index][1] = radar_data[radar_point_index]["y_cc"] #in m, position of the detection in the car-coordinate system (origin is at the center of the rear-axle)
         X[radar_point_index][2] = radar_data[radar_point_index]["vr_compensated"] #in m/s: Radial velocity for this detection but compensated for the ego-motion
         X[radar_point_index][3] = radar_data[radar_point_index]["rcs"] #in dBsm, Radar Cross Section value of the detection
-        X[radar_point_index][4] = radar_data[radar_point_index]["timestamp"] # this information is required for LSTM training, but not pointnets
-    return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
+        X[radar_point_index][4] = int(radar_data[radar_point_index]["uuid"], 16)
+    return X
+    # return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
 
 
 def radar_scenes_dataset(datasetdir: str):
@@ -337,8 +338,8 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, non_static = F
 
         index_prior =  index_post #update frame_index
 
-    train_number = int(len(data) * 0.8) #
-    validation_number = int(len(data) * 0.1) #
+    train_number = int(len(data) * 0) #.8
+    validation_number = int(len(data) * 0) #.1
     keys = list(range(len(data)))
     train_data = {}
     train_label = {}
@@ -641,14 +642,14 @@ if __name__ == "__main__":
     '''
     args = parse_args()
     
-    radar_scenes_dataset = Radar_Scenes_Validation_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
-    validationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
-    num_empty_frames = 0
-    for idx, (features, label) in enumerate(validationDataLoader):
-        if features.numel() == 1:
-            print('frame id', idx, 'is empty')
-            num_empty_frames += 1
-    print("{}%% frames in the validation set is empty".format(100*num_empty_frames/idx))
+    # radar_scenes_dataset = Radar_Scenes_Validation_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
+    # validationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
+    # num_empty_frames = 0
+    # for idx, (features, label) in enumerate(validationDataLoader):
+    #     if features.numel() == 1:
+    #         print('frame id', idx, 'is empty')
+    #         num_empty_frames += 1
+    # print("{}%% frames in the validation set is empty".format(100*num_empty_frames/idx))
     
     radar_scenes_testset = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
     testDataLoader = DataLoader(radar_scenes_testset, batch_size=1, shuffle=False, num_workers=4)
