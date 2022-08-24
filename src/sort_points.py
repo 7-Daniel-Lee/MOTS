@@ -83,7 +83,7 @@ class KalmanBoxTracker(object):
   # self.kf.R[2:,2:] *= 10.  #?  corresponds to s, r #打断点看一下值
     self.kf.P[2:,2:] *= 1000. #give high uncertainty to the unobservable initial velocities
     # in this way, we can choose if we trust measurement!!!!
-    self.kf.P *= 10.   # initial value
+    self.kf.P *= 1.   # initial value
     self.kf.Q[2:, 2:] *= 0.01  # 通过折半查找寻优
 
 
@@ -136,7 +136,7 @@ def associate_detections_to_trackers(points, trackers, distance_threshold = 0.3)
   Returns 3 lists of matches, unmatched_detections and unmatched_trackers
   """
   if(len(trackers)==0):
-    return np.empty((0,2),dtype=int), np.arange(len(points)), np.empty((0,5),dtype=int)  # change!  # 为什么中间那个是arange，其他两个是empty？
+    return np.empty((0,2),dtype=int), np.arange(len(points)), np.empty((0,5),dtype=int)  
     # matched, unmatched_dets, unmatched_trks
 
   cost_matrix = iou_batch(points, trackers)
@@ -247,11 +247,12 @@ def parse_args():
                         type=int, default=3)
     parser.add_argument("--min_hits", 
                         help="Minimum number of associated detections before track is initialised.", 
-                        type=int, default=3)
-    parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=0.3)
+                        type=int, default=2)
+    parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=5)
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose mode.')
     args = parser.parse_args()
     return args
+
 
 if __name__ == '__main__':
   # all train
@@ -340,3 +341,9 @@ if __name__ == '__main__':
         input("Press Enter to Continue")
       ax1.cla()
       ax2.cla()
+
+      # https://www.delftstack.com/zh/howto/matplotlib/set-color-for-scatterplot-in-matplotlib/  
+      # 制造一个非常长的颜色list，或者颜色代码有什么规律？
+      #  https://blog.csdn.net/CD_Don/article/details/88070453
+
+      

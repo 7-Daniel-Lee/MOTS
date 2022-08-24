@@ -166,14 +166,16 @@ def mAP_for_clustering_with_semantic_information(label, pred_label, pred_instanc
     return mAP
 
 
-# Apply trained PointNet++ for points semantic segmentation for all points.
+# # Apply trained PointNet++ for points semantic segmentation for all points.
 def pretrained_pointnet2_for_semantic_segmentation_model(model, dataLoader, dataset_D, device):
-    for duplicated_detection_points, label in dataLoader:
+    for duplicated_detection_points_with_uuid, label in dataLoader:
         # print(duplicated_detection_points[0, :20, :])
-        if duplicated_detection_points.numel() == 1:
+        if duplicated_detection_points_with_uuid.numel() == 1:
             yield None
         else:
             with torch.no_grad():
+                duplicated_detection_points = duplicated_detection_points_with_uuid[:, :, 0:4]    # 断点看下uuid在哪!!
+                # print(duplicated_detection_points)
                 duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, C, N]
                 duplicated_detection_points = duplicated_detection_points.float().to(device)
                 detection_points_semantic_segmentor = model.eval()  # Put network in evaluation mode
@@ -183,10 +185,34 @@ def pretrained_pointnet2_for_semantic_segmentation_model(model, dataLoader, data
                 pred_class = pred_label.max(2)[1]  # Get indices of the maximum log_softmax value, which will be used as predicted class
                 conf_score = pred_label.max(2)[0]  # Get the maximum log_softmax value, which will be used for mAP calculation
                 duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, N, C]
-                # print(duplicated_detection_points.shape, label.shape, pred.shape)  # label:[B, 2, N] pred:[1, N]
+                # print(duplicated_detection_points_with_uuid.shape, label.shape)  # label:[B, 2, N] pred:[1, N]
                 pred_label = np.row_stack((pred_class, conf_score)).reshape((1, 2, -1))  # 与label保持结构一致
-                duplicated_detection_points_with_semantic_information = (duplicated_detection_points, label, pred_label, pred_center_shift_vectors)
+                duplicated_detection_points_with_semantic_information = (duplicated_detection_points_with_uuid, label, pred_label, pred_center_shift_vectors)
                 yield duplicated_detection_points_with_semantic_information
+
+
+# def pretrained_pointnet2_for_semantic_segmentation_model(model, dataLoader, dataset_D, device):
+#     for duplicated_detection_points_with_uuid, label in dataLoader:
+#         # print(duplicated_detection_points[0, :20, :])
+#         if duplicated_detection_points_with_uuid.numel() == 1:
+#             yield None
+#         else:
+#             with torch.no_grad():
+#                 duplicated_detection_points = duplicated_detection_points_with_uuid[:, :, 0:4]    # 断点看下uuid在哪!!
+#                 # print(duplicated_detection_points)
+#                 duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, C, N]
+#                 duplicated_detection_points = duplicated_detection_points.float().to(device)
+#                 detection_points_semantic_segmentor = model.eval()  # Put network in evaluation mode
+#                 pred_label, pred_center_shift_vectors = detection_points_semantic_segmentor(duplicated_detection_points, dataset_D)
+#                 # Run the "trained detection_points_semantic_segmentor model" and get the predicted log_softmax and center shift vectors
+#                 # value of each of classes for batch_size frames. pred:[batch_size, num_class]
+#                 pred_class = pred_label.max(2)[1]  # Get indices of the maximum log_softmax value, which will be used as predicted class
+#                 conf_score = pred_label.max(2)[0]  # Get the maximum log_softmax value, which will be used for mAP calculation
+#                 duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, N, C]
+#                 # print(duplicated_detection_points_with_uuid.shape, label.shape)  # label:[B, 2, N] pred:[1, N]
+#                 pred_label = np.row_stack((pred_class, conf_score)).reshape((1, 2, -1))  # 与label保持结构一致
+#                 duplicated_detection_points_with_semantic_information = (duplicated_detection_points, label, pred_label, pred_center_shift_vectors)
+#                 yield duplicated_detection_points_with_semantic_information
 
 
 
@@ -205,7 +231,7 @@ def remove_duplication_detection_points_with_semantic_information(duplicated_det
             # 去除所有相同点，仅保留当前点
             label = np.delete(label[0], point_location[1:], axis=1).view(1, 2, -1)
             pred_label = np.delete(pred_label[0], point_location[1:], axis=1).reshape((1, 2, -1))
-            pred_center_shift_vectors = np.delete(pred_center_shift_vectors[0], point_location[1:], axis=0).view(1, -1, C-1)
+            pred_center_shift_vectors = np.delete(pred_center_shift_vectors[0], point_location[1:], axis=0).view(1, -1, C-2)
         idx += 1
     detection_points_with_semantic_information = (duplicated_detection_points, label, pred_label, pred_center_shift_vectors)
     return detection_points_with_semantic_information
@@ -300,4 +326,4 @@ if __name__ == '__main__':
         frames[frame_id] = instances
         frame_id += 1 
     # write to file
-    np.save('data/SegmentSeq109.npy', frames)
+    np.save('data/SegmentSeq109_uuid.npy', frames)
