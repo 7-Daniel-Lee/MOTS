@@ -11,21 +11,21 @@ from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from logging import basicConfig, DEBUG, INFO
-import matplotlib.patches as patches
-from skimage import io
+# import matplotlib.patches as patches
+# from skimage import io
 from tqdm import tqdm
 import time
 import argparse
 from filterpy.kalman import KalmanFilter
 from sklearn import cluster
+from color_scheme import COLOR
 
 from distance import euclidean_distance
 
 np.random.seed(0)
 
-# visualization for 5 classes
-COLOR = ("red","green","black","orange","purple", "blue", "yellow", "cyan", "magenta")
-CLASS = ("Car", "Pedestrian", "Pedestrian Group", "Two Wheeler", "Large Vehicle")
+
+NUM_COLOR = len(COLOR)
 
 
 def linear_assignment(cost_matrix):
@@ -268,7 +268,7 @@ if __name__ == '__main__':
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, args.phase, 'SegmentSeq109.npy')
+  segments_path = os.path.join(args.seq_path, args.phase, 'SegmentSeq109_trackid.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -279,13 +279,15 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax1 = fig.add_subplot(121, aspect='equal')
     ax2 = fig.add_subplot(122, aspect='equal')
+    track_id_list = []
     
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     if frame != []:
       clusters = [instance['points'] for instance in frame.values()]  ##  改成points！ x, y, class 的ndarray
       class_ids = [instance['class_ID'] for instance in frame.values()]
+      track_ids = [instance['track_id'] for instance in frame.values()]
 
-      points = np.zeros((1, 5))
+      points = np.zeros((1, 6))
       for idx, cluster in enumerate(clusters): 
         class_id = class_ids[idx]
         # print(cluster.shape)
@@ -298,11 +300,22 @@ if __name__ == '__main__':
       points = np.delete(points, 0, axis=0)
     
       if(display):
-        # display segementor output with scatter plot in ego-vehicle coordinate
-        for idx, cluster in enumerate(clusters):
-          y = cluster[:, :, 0]  # x_cc
-          x = cluster[:, :, 1]  # y_cc
-          ax1.scatter(x, y, c=COLOR[idx%9], s=7)
+        # display gnd instances with scatter plot in ego-vehicle coordinate        
+        for cluster_id, cluster in enumerate(clusters):
+          track_id_array = track_ids[cluster_id]
+          for i in range(cluster.shape[1]):
+            y = cluster[:, i, 0]  # x_cc
+            x = cluster[:, i, 1]  # y_cc
+            try:
+              track_id = track_id_array[i]
+            except IndexError:
+              track_id = track_id_array.item()
+            if track_id not in track_id_list:
+              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
+              track_id_list.append(track_id)
+            else:
+              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
+            ax1.scatter(x, y, c=color, s=7)  # 
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
@@ -313,26 +326,26 @@ if __name__ == '__main__':
 
       if(display):
         # empty frame
-        ax1.set_xlabel('x/m')
-        ax1.set_ylabel('y/m')
-        ax1.set_xlim(-50, 50)
+        ax1.set_xlabel('y_cc/m')
+        ax1.set_ylabel('x_cc/m')
+        ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)        
          
-    start_time = time.time()
-    tracked_points = mot_tracker.update(points)
-    cycle_time = time.time() - start_time
-    total_time += cycle_time
+    # start_time = time.time()
+    # tracked_points = mot_tracker.update(points)
+    # cycle_time = time.time() - start_time
+    # total_time += cycle_time
 
-    for tracked_point in tracked_points:
-      print('Tracked Points x:{} y:{}'.format(tracked_point[0], tracked_point[1]))
+    # for tracked_point in tracked_points:
+    #   print('Tracked Points x:{} y:{}'.format(tracked_point[0], tracked_point[1]))
     if display:
-      tracked_points = np.array(tracked_points)
-      ax2.scatter(tracked_points[:, 1], tracked_points[:, 0], c='b', s=7)
-      ax2.set_xlabel('y_cc/m')
-      # ax2.set_ylabel('x_cc/m')
-      ax2.set_xlim(50, -50)
-      ax2.set_ylim(0, 100)
-      ax2.set_title('Tracking')
+      # tracked_points = np.array(tracked_points)
+      # ax2.scatter(tracked_points[:, 1], tracked_points[:, 0], c='b', s=7)
+      # ax2.set_xlabel('y_cc/m')
+      # # ax2.set_ylabel('x_cc/m')
+      # ax2.set_xlim(50, -50)
+      # ax2.set_ylim(0, 100)
+      # ax2.set_title('Tracking')
 
       fig.canvas.flush_events()
       plt.show() 
@@ -340,7 +353,7 @@ if __name__ == '__main__':
       if args.verbose:
         input("Press Enter to Continue")
       ax1.cla()
-      ax2.cla()
+      # ax2.cla()
 
       # https://www.delftstack.com/zh/howto/matplotlib/set-color-for-scatterplot-in-matplotlib/  
       # 制造一个非常长的颜色list，或者颜色代码有什么规律？
