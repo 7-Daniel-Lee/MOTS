@@ -86,6 +86,20 @@ def extract_instance_centeroid(instance:np.ndarray)->Tuple[float, float]:
   return np.array((x_center, y_center)).reshape((2, 1))
 
 
+def get_mean_doppler_velocity(instance:np.ndarray)->Tuple[float, float]:
+  '''
+  1. decompose each Vr along the x and y axis 2. get the mean Vrx, Vry
+  '''
+  xcc = instance[:, :, 0]
+  ycc = instance[:, :, 1]
+  vr = instance[:, :, 2]
+  cosine_thetas =  xcc / np.sqrt(xcc^2 + ycc^2)
+  sine_thetas = ycc / np.sqrt(xcc^2 + ycc^2)
+  mean_vr_x = np.mean(vr*cosine_thetas)
+  mean_vr_y = np.mean(vr*sine_thetas)
+  return (mean_vr_x, mean_vr_y)
+
+
 class KalmanBoxTracker(object):
   """
   This class represents the internal state of individual tracked objects observed as bbox.

@@ -100,7 +100,7 @@ class KalmanBoxTracker(object):
     """
     Updates the state vector with observed bbox.
     """
-    self.time_since_update = 0
+    self.time_since_update = 0  # 需要在这里更改状态 self.kf.x的值，直接等于测量的质心和平均Vr  看PPT注释！
     self.history = []
     self.hits += 1
     self.hit_streak += 1  # the total number of times it consecutively got matched with a detection in the last frames.
@@ -358,5 +358,8 @@ if __name__ == '__main__':
       # https://www.delftstack.com/zh/howto/matplotlib/set-color-for-scatterplot-in-matplotlib/  
       # 制造一个非常长的颜色list，或者颜色代码有什么规律？
       #  https://blog.csdn.net/CD_Don/article/details/88070453
+
+      # 如何实现一键暂停，一键继续？
+
 
       
