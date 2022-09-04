@@ -2,41 +2,43 @@
     SORT adpted version for tracking by instance segmentation
 """
 from __future__ import print_function
+from cmath import nan
 
 import os
+from sys import displayhook
 from turtle import distance
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from skimage import io
+from logging import basicConfig, DEBUG, INFO
+# import matplotlib.patches as patches
+# from skimage import io
 from tqdm import tqdm
 import time
 import argparse
 from filterpy.kalman import KalmanFilter
 from sklearn import cluster
+from color_scheme import COLOR
 
-from distance import convex_hull_iou, euclidea_distance
+from distance import euclidean_distance
 
 np.random.seed(0)
 
-# visualization for 5 classes
-COLOR = ("red","green","black","orange","purple", "blue", "yellow", "cyan", "magenta")
-CLASS = ("Car", "Pedestrian", "Pedestrian Group", "Two Wheeler", "Large Vehicle")
+NUM_COLOR = len(COLOR)
 
 
 def linear_assignment(cost_matrix):
   '''
   Hungarian algorithm to solve the MOT association problem
   '''
-  try:
-    import lap
-    _, x, y = lap.lapjv(cost_matrix, extend_cost=True)
-    return np.array([[y[i],i] for i in x if i >= 0]) #
-  except ImportError:
-    from scipy.optimize import linear_sum_assignment
-    x, y = linear_sum_assignment(cost_matrix)
-    return np.array(list(zip(x, y)))
+  # try:
+  #   import lap
+  #   _, x, y = lap.lapjv(cost_matrix, extend_cost=True)
+  #   return np.array([[y[i],i] for i in x if i >= 0]) #
+  # except ImportError:
+  from scipy.optimize import linear_sum_assignment
+  x, y = linear_sum_assignment(cost_matrix)
+  return np.array(list(zip(x, y)))
 
 
 def iou_batch(segment_instances:List, tracked_instances:List)->np.ndarray:
@@ -51,25 +53,27 @@ def iou_batch(segment_instances:List, tracked_instances:List)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      segment_x, segment_y = extract_instance_centeroid(segment_instances[row].numpy())
-      tracked_x,  tracked_y = extract_instance_centeroid(tracked_instances[col].numpy())
-      distance = euclidea_distance(segment_x, segment_y, tracked_x, tracked_y)
+      segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
+      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+      distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
 
 
-def convert_centroid_to_instance(state:np.ndarray, frame:dict)->dict:
+def find_instance_from_prediction(pred:np.ndarray, frame:dict)->dict:
   '''
-  Given updated state of instance centeroid, find the closest segemented instance
+  Given predicted state of instance centeroid, find the closest segemented instance
   '''
-  # 空frame怎么办?
-  pred_x, pred_y = state[:2]
+  # empty frame
+  if frame == []:
+    return 
+  pred_x, pred_y = pred[:2]
   min_distance = 1e5
   optimal_instance = None
   for instance in frame.values():
     cluster = instance['points']
-    segement_centroid_x, segement_centroid_y = extract_instance_centeroid(cluster)
-    distance = euclidea_distance(segement_centroid_x, segement_centroid_y, 
+    segement_centroid_x, segement_centroid_y = get_cluster_centeroid(cluster)
+    distance = euclidean_distance(segement_centroid_x, segement_centroid_y, 
                                   pred_x, pred_y)
     if min_distance > distance:
       min_distance = distance
@@ -77,27 +81,29 @@ def convert_centroid_to_instance(state:np.ndarray, frame:dict)->dict:
   return optimal_instance
 
 
-def extract_instance_centeroid(instance:np.ndarray)->Tuple[float, float]:
+def get_cluster_centeroid(cluster:np.ndarray)->Tuple[float, float]:
   '''
-  extract the centeroid of an instance by getting the mean of x, y
+  extract the centeroid of an cluster by getting the mean of x, y
   '''
-  x_center = instance[:, :, 0].mean()
-  y_center = instance[:, :, 1].mean()
+  x_center = cluster[:, :, 0].mean()
+  y_center = cluster[:, :, 1].mean()
   return np.array((x_center, y_center)).reshape((2, 1))
 
 
-def get_mean_doppler_velocity(instance:np.ndarray)->Tuple[float, float]:
+def get_mean_doppler_velocity(cluster:np.ndarray)->Tuple[float, float]:
   '''
   1. decompose each Vr along the x and y axis 2. get the mean Vrx, Vry
   '''
-  xcc = instance[:, :, 0]
-  ycc = instance[:, :, 1]
-  vr = instance[:, :, 2]
-  cosine_thetas =  xcc / np.sqrt(xcc^2 + ycc^2)
-  sine_thetas = ycc / np.sqrt(xcc^2 + ycc^2)
-  mean_vr_x = np.mean(vr*cosine_thetas)
-  mean_vr_y = np.mean(vr*sine_thetas)
-  return (mean_vr_x, mean_vr_y)
+  xcc = cluster[:, :, 0]
+  ycc = cluster[:, :, 1]
+  vr = cluster[:, :, 2]
+  cosine_thetas =  xcc / np.sqrt(xcc*xcc + ycc*ycc)
+  sine_thetas = ycc / np.sqrt(xcc*xcc + ycc*ycc)
+  vr_x = np.squeeze(vr*cosine_thetas)
+  vr_y = vr*sine_thetas
+  mean_vr_x = np.mean(vr_x)
+  mean_vr_y = np.mean(vr_y)
+  return np.array((mean_vr_x, mean_vr_y)).reshape((2, 1))
 
 
 class KalmanBoxTracker(object):
@@ -126,7 +132,7 @@ class KalmanBoxTracker(object):
     self.kf.Q[2:, 2:] *= 0.01  # 通过折半查找寻优
 
 
-    self.kf.x[:2] = extract_instance_centeroid(cluster)
+    self.kf.x[:2] = get_cluster_centeroid(cluster)
     self.time_since_update = 0
     self.id = KalmanBoxTracker.count
     KalmanBoxTracker.count += 1
@@ -135,7 +141,7 @@ class KalmanBoxTracker(object):
     self.hit_streak = 0
     self.age = 0
 
-  def update(self,cluster):
+  def update(self, cluster):
     """
     Updates the state vector with observed bbox.
     """
@@ -143,7 +149,9 @@ class KalmanBoxTracker(object):
     self.history = []
     self.hits += 1
     self.hit_streak += 1
-    self.kf.update(extract_instance_centeroid(cluster))
+    self.kf.x[:2] = get_cluster_centeroid(cluster)  
+    self.kf.x[2:] = get_mean_doppler_velocity(cluster) 
+    
 
   def predict(self, frame):
     """
@@ -157,14 +165,14 @@ class KalmanBoxTracker(object):
     if(self.time_since_update>0):
       self.hit_streak = 0
     self.time_since_update += 1 # the number of prediction without update by new measurements
-    self.history.append(convert_centroid_to_instance(self.kf.x, frame))  # 这里需要改！！！
+    self.history.append(find_instance_from_prediction(self.kf.x, frame))  
     return self.history[-1] # only return the latest prediction
 
   def get_state(self, frame):
     """
     Returns the current instance estimate.
     """
-    return convert_centroid_to_instance(self.kf.x, frame)
+    return find_instance_from_prediction(self.kf.x, frame)
 
 
 def associate_detections_to_trackers(instances:List, trackers:List, distance_threshold = 0.3):  # tune threshhold！
@@ -214,10 +222,6 @@ def associate_detections_to_trackers(instances:List, trackers:List, distance_thr
   return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def visualize_tracker():
-  return
-
-
 class Sort(object):
   def __init__(self, max_age=1, min_hits=3, distance_threshold=0.3):
     """
@@ -260,7 +264,7 @@ class Sort(object):
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(clusters[m[0]])
+      self.trackers[m[1]].update(clusters[m[0]].numpy())   
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -271,8 +275,7 @@ class Sort(object):
         d = trk.get_state(frame) 
         # rule-based track management
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
-          ret.append(d)
-          # d:the current instance estimate, dict  # 格式必须修改! 无法concatenate
+          ret.append((d, [trk.id+1]))
         i -= 1
         # remove dead tracklet
         if(trk.time_since_update > self.max_age):
@@ -308,7 +311,7 @@ if __name__ == '__main__':
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109.npy')
+  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109_trackid.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -317,52 +320,88 @@ if __name__ == '__main__':
   if(display):
     plt.ion()
     fig = plt.figure()
-    ax1 = fig.add_subplot(111, aspect='equal')
-    # fig.axis('off')
+    ax1 = fig.add_subplot(121, aspect='equal')
+    ax2 = fig.add_subplot(122, aspect='equal')
+    track_id_list = []  #gnd
+
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
-    
-    start_time = time.time()
-    trackers = mot_tracker.update(frame)
-    cycle_time = time.time() - start_time
-    total_time += cycle_time
 
     if frame != []:
       clusters = [instance['points'] for instance in frame.values()]
       class_ids = [instance['class_ID'] for instance in frame.values()]
+      track_ids = [instance['track_id'] for instance in frame.values()]
   
+      points = np.zeros((1, 6))
+      for idx, cluster in enumerate(clusters): 
+        class_id = class_ids[idx]
+        # print(cluster.shape)
+        cluster = cluster.numpy().squeeze(axis=0)
+        # print(cluster.shape)
+        num_row = cluster.shape[0]
+        class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
+        cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
+        points = np.concatenate((points, cluster_with_class), axis=0)
+      points = np.delete(points, 0, axis=0)
+    
       if(display):
-        # display segementor output with scatter plot in ego-vehicle coordinate
-        for idx, cluster in enumerate(clusters):
-          y = cluster[:, :, 0]  # x_cc
-          x = cluster[:, :, 1]  # y_cc
-          ax1.scatter(x, y, c=COLOR[idx%9], s=7)
+        # display gnd instances with scatter plot in ego-vehicle coordinate        
+        for cluster_id, cluster in enumerate(clusters):
+          track_id_array = track_ids[cluster_id]
+          for i in range(cluster.shape[1]):
+            y = cluster[:, i, 0]  # x_cc
+            x = cluster[:, i, 1]  # y_cc
+            try:
+              track_id = track_id_array[i]
+            except IndexError:
+              track_id = track_id_array.item()
+            if track_id not in track_id_list:
+              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
+              track_id_list.append(track_id)
+            else:
+              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
+            ax1.scatter(x, y, c=color, s=7)  # 
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)
-        fig.canvas.flush_events()
-        plt.show() 
-        plt.pause(.1)
-        # input("Press Enter to Continue")
-        ax1.cla()
+        ax1.set_title('Segmentation')
     else:
+      points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
+
       if(display):
-        # display segementor output with scatter plot in ego-vehicle coordinat
-        ax1.set_xlabel('x/m')
-        ax1.set_ylabel('y/m')
-        ax1.set_xlim(-50, 50)
-        ax1.set_ylim(0, 100)
-        # #plt.legend
-        # 然后用凸包的线表示tracking结果
-        # fig.canvas.draw()
+        # empty frame
+        ax1.set_xlabel('y_cc/m')
+        ax1.set_ylabel('x_cc/m')
+        ax1.set_xlim(50, -50)
+        ax1.set_ylim(0, 100)        
+ 
+
+    start_time = time.time()
+    tracked_instances = mot_tracker.update(frame)
+    cycle_time = time.time() - start_time
+    total_time += cycle_time
+
+    for tracked_instance, tracker_id in tracked_instances:
+      print('tracked instance')
+      if(display):
+        tracked_points = tracked_instance['points']
+        color = COLOR[tracker_id%NUM_COLOR]
+        ax2.scatter(tracked_points[:, 1], tracked_points[:, 0], c=color, s=7)
+        ax2.set_xlabel('y_cc/m')
+        # ax2.set_ylabel('x_cc/m')
+        ax2.set_xlim(50, -50)
+        ax2.set_ylim(0, 100)
+        ax2.set_title('Tracking')
+
         fig.canvas.flush_events()
         plt.show() 
         plt.pause(.1)
-        # input("Press Enter to Continue")
+        if args.verbose:
+          input("Press Enter to Continue")
         ax1.cla()
-      pass
+        ax2.cla()
 
-  # print("Total Tracking took: %.3f seconds for %d frames or %.1f FPS" % (total_time, frame+1, (frame+1) / total_time))
 
-  if(display):
-    print("Note: to get real runtime results run without the option: --display")
+        # sort源码中是如何解决同一个tracker用同一个颜色的？？?
+        # 用Kalman filter的id
+
