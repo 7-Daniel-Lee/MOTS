@@ -275,7 +275,7 @@ class Sort(object):
         d = trk.get_state(frame) 
         # rule-based track management
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
-          ret.append((d, [trk.id+1]))
+          ret.append((d, trk.id+1))
         i -= 1
         # remove dead tracklet
         if(trk.time_since_update > self.max_age):
@@ -293,18 +293,20 @@ def parse_args():
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
-                        type=int, default=1)
+                        type=int, default=3)
     parser.add_argument("--min_hits", 
                         help="Minimum number of associated detections before track is initialised.", 
-                        type=int, default=3)
-    parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=0.3)
+                        type=int, default=2)
+    parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=3)
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose mode.')
     args = parser.parse_args()
     return args
 
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  display = args.display
+  # display = args.display
+  display = True
   phase = args.phase
   total_time = 0.0
 
@@ -382,11 +384,11 @@ if __name__ == '__main__':
     total_time += cycle_time
 
     for tracked_instance, tracker_id in tracked_instances:
-      print('tracked instance')
+      # print('tracked instance')
       if(display):
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]
-        ax2.scatter(tracked_points[:, 1], tracked_points[:, 0], c=color, s=7)
+        ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
         ax2.set_xlabel('y_cc/m')
         # ax2.set_ylabel('x_cc/m')
         ax2.set_xlim(50, -50)
