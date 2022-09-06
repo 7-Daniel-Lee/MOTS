@@ -19,7 +19,7 @@ import argparse
 from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
-
+from scipy.optimize import linear_sum_assignment
 from distance import euclidean_distance
 
 np.random.seed(0)
@@ -31,12 +31,6 @@ def linear_assignment(cost_matrix):
   '''
   Hungarian algorithm to solve the MOT association problem
   '''
-  # try:
-  #   import lap
-  #   _, x, y = lap.lapjv(cost_matrix, extend_cost=True)
-  #   return np.array([[y[i],i] for i in x if i >= 0]) #
-  # except ImportError:
-  from scipy.optimize import linear_sum_assignment
   x, y = linear_sum_assignment(cost_matrix)
   return np.array(list(zip(x, y)))
 
@@ -62,7 +56,7 @@ def iou_batch(segment_instances:List, tracked_instances:List)->np.ndarray:
 
 def find_instance_from_prediction(pred:np.ndarray, frame:dict)->dict:
   '''
-  Given predicted state of instance centeroid, find the closest segemented instance
+  Given predicted state of instance centeroid, find the closest segemented cluster
   '''
   # empty frame
   if frame == []:
@@ -143,7 +137,8 @@ class KalmanBoxTracker(object):
 
   def update(self, cluster):
     """
-    Updates the state vector with observed bbox.
+    Updates the state vector with measurements
+    param: cluster: found cluster that is closest to the prediction state
     """
     self.time_since_update = 0
     self.history = []
@@ -155,7 +150,8 @@ class KalmanBoxTracker(object):
 
   def predict(self, frame):
     """
-    Advances the state vector and returns the predicted bounding box estimate.
+    Advances the state vector and returns the predicted instance
+    param: frame: frame at t+1
     return: a instance, dictionary {class_id:xxx, points: ndarray}
     """
     # if((self.kf.x[6]+self.kf.x[2])<=0):   
@@ -255,16 +251,18 @@ class Sort(object):
         to_del.append(t)
     for t in reversed(to_del):
       self.trackers.pop(t)
+
     if frame == []:
       clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
     else:
       clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
+
     matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
     # 可以分别做2次association,小于两个点的用距离，大于的用IOU
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(clusters[m[0]].numpy())   
+      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -296,11 +294,12 @@ def parse_args():
                         type=int, default=3)
     parser.add_argument("--min_hits", 
                         help="Minimum number of associated detections before track is initialised.", 
-                        type=int, default=2)
-    parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=3)
+                        type=int, default=1)
+    parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=0.1)
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose mode.')
     args = parser.parse_args()
     return args
+
 
 if __name__ == '__main__':
   # all train
@@ -327,7 +326,6 @@ if __name__ == '__main__':
     track_id_list = []  #gnd
 
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
-
     if frame != []:
       clusters = [instance['points'] for instance in frame.values()]
       class_ids = [instance['class_ID'] for instance in frame.values()]
@@ -389,19 +387,19 @@ if __name__ == '__main__':
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]
         ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
-        ax2.set_xlabel('y_cc/m')
-        # ax2.set_ylabel('x_cc/m')
-        ax2.set_xlim(50, -50)
-        ax2.set_ylim(0, 100)
-        ax2.set_title('Tracking')
+    ax2.set_xlabel('y_cc/m')
+    # ax2.set_ylabel('x_cc/m')
+    ax2.set_xlim(50, -50)
+    ax2.set_ylim(0, 100)
+    ax2.set_title('Tracking')
 
-        fig.canvas.flush_events()
-        plt.show() 
-        plt.pause(.1)
-        if args.verbose:
-          input("Press Enter to Continue")
-        ax1.cla()
-        ax2.cla()
+    fig.canvas.flush_events()
+    plt.show() 
+    plt.pause(.1)
+    if args.verbose:
+      input("Press Enter to Continue")
+    ax1.cla()
+    ax2.cla()
 
 
         # sort源码中是如何解决同一个tracker用同一个颜色的？？?
