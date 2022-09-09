@@ -18,7 +18,9 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
-from distance import euclidean_distance
+from distance import convex_hull_iou, euclidean_distance
+from src.sort_instance_Euclidean import find_instance_from_prediction, get_cluster_centeroid, get_mean_doppler_velocity, KalmanBoxTracker, Sort, parse_args
+
 
 np.random.seed(0)
 
@@ -33,11 +35,12 @@ def linear_assignment(cost_matrix):
   return np.array(list(zip(x, y)))
 
 
-def iou_batch(segment_instances:List, tracked_instances:List)->np.ndarray:
+def metric_batch(segment_instances:List, tracked_instances:List, association_flag:str)->np.ndarray:
   """
-  From SORT: Computes IOU between two instances 
+  From SORT: Computes distance between two instances' centroid 
   segment_instances:
   tracked_instances: 
+  assocation_flag: the metric for each element in the cost matrix, Euclidean distance or convex hull IOU
   return IOU matrix, the negative of cost matrix
   """
   num_seg = len(segment_instances) 
@@ -45,11 +48,30 @@ def iou_batch(segment_instances:List, tracked_instances:List)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
-      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
-      distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
-      cost_matrix[row, col] = distance
+        if assocation_flag == 'Euclidean':
+            segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
+            tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+            distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
+            cost_matrix[row, col] = distance
+        elif assocation_flag == 'IOU':
+            cost_matrix[row, col] = -convex_hull_iou(segment_instances[row].numpy(), tracked_instances[col].numpy())
   return cost_matrix
+
+
+# def iou_batch(segment_instances:List, tracked_instances:List):
+#   """
+#   From SORT: Computes IOU between two instances 
+#   segment_instances:
+#   tracked_instances: 
+#   return IOU matrix, the negative of cost matrix
+#   """
+#   num_seg = len(segment_instances) 
+#   num_track = len(tracked_instances)
+#   iou_matrix = np.zeros((num_seg, num_track))
+#   for row in range(num_seg):
+#     for col in range(num_track):
+#       iou_matrix[row, col] = convex_hull_iou(segment_instances[row].numpy(), tracked_instances[col].numpy())
+#   return iou_matrix
 
 
 def find_instance_from_prediction(pred:np.ndarray, frame:dict)->dict:
@@ -133,7 +155,7 @@ class KalmanBoxTracker(object):
     self.hit_streak = 0
     self.age = 0
 
-  def update(self, cluster):
+  def update(self, cluster, velocity_flag):
     """
     Updates the state vector with measurements
     param: cluster: found cluster that is closest to the prediction state
@@ -142,8 +164,9 @@ class KalmanBoxTracker(object):
     self.history = []
     self.hits += 1
     self.hit_streak += 1
-    self.kf.x[:2] = get_cluster_centeroid(cluster)  
-    self.kf.x[2:] = get_mean_doppler_velocity(cluster) 
+    self.kf.x[:2] = get_cluster_centeroid(cluster)
+    if velocity_flag: # trust measurement ,take the mean Vr as the state's velocity
+        self.kf.x[2:] = get_mean_doppler_velocity(cluster) 
     
 
   def predict(self, frame):
@@ -180,7 +203,7 @@ def associate_detections_to_trackers(instances:List, trackers:List, distance_thr
     return np.empty((0,2),dtype=int), np.arange(len(instances)), np.empty((0,5),dtype=int)  # change!  # 为什么中间那个是arange，其他两个是empty？
     # matched, unmatched_dets, unmatched_trks
 
-  cost_matrix = iou_batch(instances, trackers)
+  cost_matrix = metric_batch(instances, trackers)
 
   if min(cost_matrix.shape) > 0:
     a = (cost_matrix < distance_threshold).astype(np.int32)
@@ -284,6 +307,16 @@ class Sort(object):
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='SORT demo')
+    parser.add_argument('-a',
+                        '--association',
+                        help='association metric to generate the cost matrix, either Euclidean distance or convex hull IOU',
+                        type=str,
+                        default='EuclideanDistance'
+    )
+    parser.add_argument('-v',
+                        '--velocity',
+                        help='choose trusting the measurement Doppler radial velocity or not',
+                        action='store_true')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
@@ -332,9 +365,7 @@ if __name__ == '__main__':
       points = np.zeros((1, 6))
       for idx, cluster in enumerate(clusters): 
         class_id = class_ids[idx]
-        # print(cluster.shape)
         cluster = cluster.numpy().squeeze(axis=0)
-        # print(cluster.shape)
         num_row = cluster.shape[0]
         class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
         cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
@@ -380,13 +411,11 @@ if __name__ == '__main__':
     total_time += cycle_time
 
     for tracked_instance, tracker_id in tracked_instances:
-      # print('tracked instance')
       if(display):
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]
         ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
     ax2.set_xlabel('y_cc/m')
-    # ax2.set_ylabel('x_cc/m')
     ax2.set_xlim(50, -50)
     ax2.set_ylim(0, 100)
     ax2.set_title('Tracking')
@@ -403,3 +432,5 @@ if __name__ == '__main__':
         # sort源码中是如何解决同一个tracker用同一个颜色的？？?
         # 用Kalman filter的id
 
+    # 当时说IOU会存在一个instance只有一个点，无法求IOU的情况是怎么解决的？ 
+    # not solved yet!
