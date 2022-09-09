@@ -143,7 +143,7 @@ class KalmanBoxTracker(object):
     self.hits += 1
     self.hit_streak += 1
     self.kf.x[:2] = get_cluster_centeroid(cluster)  
-    self.kf.x[2:] = get_mean_doppler_velocity(cluster) 
+    # self.kf.x[2:] = get_mean_doppler_velocity(cluster) # don't trust the measurement, only estimate velocity
     
 
   def predict(self, frame):
