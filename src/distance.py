@@ -12,8 +12,10 @@ def convex_hull_iou(gnd_instance:ndarray, seg_instance:ndarray)->float:
            gnd_instance: segment clusters with M rows, each row <x,y, rcs, vr>
     return: convex hull iou
     '''
-    # 如果只有一个点就用正负1得到一个很小的凸包，合适吗？
-    poly1 = Polygon(gnd_instance[:, :, :2].squeeze()).convex_hull # 如果只有一个点无法形成凸包？？？
+    # at least 3 points to be a convex hull
+    assert (gnd_instance.shape[1] >= 3) and  (seg_instance.shape[1] >= 3)
+           
+    poly1 = Polygon(gnd_instance[:, :, :2].squeeze()).convex_hull 
     poly2 = Polygon(seg_instance[:, :, :2].squeeze()).convex_hull
     if not poly1.intersects(poly2): 
        return 0
