@@ -98,6 +98,71 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
   return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
+class Sort(object):
+  def __init__(self, max_age=1, min_hits=3, distance_threshold=0.3):
+    """
+    Sets key parameters for SORT
+    """
+    self.max_age = max_age
+    self.min_hits = min_hits
+    self.distance_threshold = distance_threshold
+    self.trackers = []
+    self.frame_count = 0
+
+  def update(self, frame:dict):
+    """
+    Params:
+    frame: dictionary 
+      clusters - a list of ndarray 
+    Requires: this method must be called once for each frame even with empty detections (use np.empty((0, 5)) for frames without detections).
+    Returns the a similar array, where the last column is the object ID.
+
+    NOTE: The number of objects returned may differ from the number of detections provided.
+    """
+    self.frame_count += 1
+    # get predicted locations from existing trackers, associate the detections with predictions  
+    trks = []  
+    to_del = []
+    ret = []
+    for t in range(len(self.trackers)):
+      pred = self.trackers[t].predict(frame)['points'] # ndarray
+      trks.append(pred)
+      if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
+        to_del.append(t)
+    for t in reversed(to_del):
+      self.trackers.pop(t)
+
+    if frame == []:
+      clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
+    else:
+      clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
+
+    matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
+    # 可以分别做2次association,小于两个点的用距离，大于的用IOU
+
+    # update matched trackers with assigned detections
+    for m in matched:
+      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
+
+    # create and initialise new trackers for unmatched detections
+    for i in unmatched_dets:
+        trk = KalmanBoxTracker(clusters[i])   # one new tracker for each unmatched cluster   
+        self.trackers.append(trk)
+    i = len(self.trackers)
+    for trk in reversed(self.trackers):
+        d = trk.get_state(frame) 
+        # rule-based track management 持续更新+ 连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧
+        if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):  # there are three trackers, but only one added in the output 
+          ret.append((d, trk.id+1)) # 
+        i -= 1
+        # remove dead tracklet
+        if(trk.time_since_update > self.max_age):
+          self.trackers.pop(i)
+    if(len(ret)>0):
+      return ret
+    return np.empty((0,5))
+
+
 
 if __name__ == '__main__':
   # all train
