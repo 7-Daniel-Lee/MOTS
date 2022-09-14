@@ -63,6 +63,9 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
     # matched, unmatched_dets, unmatched_trks
 
   iou_matrix = iou_batch(instances, trackers)
+  # here judge the shape of instances and trackers first, group them based on if there are more than 3 points
+  # associate intances that are less three points
+  # associate instances that are more than three points
 
   if min(iou_matrix.shape) > 0:
     a = (iou_matrix > iou_threshold).astype(np.int32)
@@ -227,7 +230,8 @@ if __name__ == '__main__':
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)
-        ax1.set_title('Segmentation')
+        ax1.set_title('Ground Truth Tracks') # it is wrong
+        # add another subplot for segmentation
     else:
       points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
 

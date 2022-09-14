@@ -292,6 +292,7 @@ def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
+    parser.add_argument('-s', '--save', dest='save', help='Save each frame of the animation', action='store_true')
     parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
@@ -394,7 +395,10 @@ if __name__ == '__main__':
       ax2.set_xlabel('y_cc/m')
       ax2.set_xlim(50, -50)
       ax2.set_ylim(0, 100)
-      ax2.set_title('Tracking')
+      ax2.set_title('Tracking')  
+      
+      if args.save: # save images
+        plt.savefig('img/{}.jpg'.format(frame_idx))
 
       fig.canvas.flush_events()
       plt.show() 
