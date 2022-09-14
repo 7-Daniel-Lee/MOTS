@@ -201,8 +201,8 @@ def features_from_radar_data(radar_data):
         X[radar_point_index][1] = radar_data[radar_point_index]["y_cc"] #in m, position of the detection in the car-coordinate system (origin is at the center of the rear-axle)
         X[radar_point_index][2] = radar_data[radar_point_index]["vr_compensated"] #in m/s: Radial velocity for this detection but compensated for the ego-motion
         X[radar_point_index][3] = radar_data[radar_point_index]["rcs"] #in dBsm, Radar Cross Section value of the detection
-        # X[radar_point_index][4] = int(radar_data[radar_point_index]["track_id"], 16)
-        X[radar_point_index][4] = int(radar_data[radar_point_index]["uuid"], 16)
+        X[radar_point_index][4] = int(radar_data[radar_point_index]["track_id"], 16)
+        # X[radar_point_index][4] = int(radar_data[radar_point_index]["uuid"], 16)
     return X
     # return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
 
