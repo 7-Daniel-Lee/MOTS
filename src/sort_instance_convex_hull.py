@@ -5,6 +5,7 @@ from __future__ import print_function
 from cmath import nan
 
 import os
+from copy import deepcopy
 from sys import displayhook
 from turtle import distance
 from typing import List, Tuple
@@ -19,7 +20,7 @@ from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
 from distance import convex_hull_iou
-from src.sort_instance_Euclidean import find_instance_from_prediction, get_cluster_centeroid, get_mean_doppler_velocity, KalmanBoxTracker, Sort, parse_args
+from src.sort_instance_Euclidean import find_instance_from_prediction, get_cluster_centeroid, get_mean_doppler_velocity, KalmanBoxTracker, Sort, parse_args, get_cost
 
 
 np.random.seed(0)
@@ -51,7 +52,7 @@ def iou_batch(segment_instances:List, tracked_instances:List):
   return iou_matrix
 
 
-def associate_detections_to_trackers(instances:List, trackers:List, iou_threshold = 0.3):
+def associate_detections_to_trackers(instances:List, trackers:List, iou_threshold = 0.3, distance_threshold=0.1):
   """
   Assigns instance segmentations to tracked object (both represented as clusters)
   param trackers: trackers' predictions in this frame
@@ -62,37 +63,89 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
     return np.empty((0,2),dtype=int), np.arange(len(instances)), np.empty((0,5),dtype=int)  # change!  # 为什么中间那个是arange，其他两个是empty？
     # matched, unmatched_dets, unmatched_trks
 
-  iou_matrix = iou_batch(instances, trackers)
-  # here judge the shape of instances and trackers first, group them based on if there are more than 3 points
-  # associate intances that are less three points
-  # associate instances that are more than three points
+  # here judge the shape of instances and trackers first, 
+  # group them based on if there are more than 3 points
+  instances = deepcopy(instances)
+  trackers = deepcopy(trackers)
+  instances_less_2 = []
+  trackers_less_2 = []
+  instances_idx = []
+  trackers_idx = []
+  for idx, instance in enumerate(instances):
+    if instance.shape[1] < 3:
+      instances_idx.append(idx)
+      instances_less_2.append(instance)
+  for idx in reversed(instances_idx):
+    instances.pop(idx)
+  for idx, tracker in enumerate(trackers):
+    if tracker.shape[1] < 3:
+      trackers_idx.append(idx)
+      trackers_less_2.append(tracker)
+  for idx in reversed(trackers_idx):
+    trackers.pop(idx)
+  
+  # if len(instances_less_2) and len(trackers_less_2):
+  # associate intances that are less than three points
+  euclidean_matrix = get_cost(instances_less_2, trackers_less_2)
+  if min(euclidean_matrix.shape) > 0:
+    a = (euclidean_matrix > iou_threshold).astype(np.int32)
+    if a.sum(1).max() == 1 and a.sum(0).max() == 1:
+      eu_matched_indices = np.stack(np.where(a), axis=1)
+    else:
+      eu_matched_indices = linear_assignment(euclidean_matrix)
+  else:
+    eu_matched_indices = np.empty(shape=(0,2))
 
+  eu_unmatched_detections = []
+  for d, det in enumerate(instances_less_2):
+    if(d not in eu_matched_indices[:,0]):
+      eu_unmatched_detections.append(d) # list of instances id
+  eu_unmatched_trackers = []
+  for t, trk in enumerate(trackers_less_2):
+    if(t not in eu_matched_indices[:,1]):
+      eu_unmatched_trackers.append(t)
+  #filter out matched with large distance
+  eu_matches = []
+  for m in eu_matched_indices:
+    if(euclidean_matrix[m[0], m[1]]>distance_threshold):
+      eu_unmatched_detections.append(m[0])
+      eu_unmatched_trackers.append(m[1])
+    else:
+      eu_matches.append(m.reshape(1,2))
+
+  # if len(instances) and len(trackers):
+    # associate instances that are more than three points
+  iou_matrix = iou_batch(instances, trackers)
   if min(iou_matrix.shape) > 0:
     a = (iou_matrix > iou_threshold).astype(np.int32)
     if a.sum(1).max() == 1 and a.sum(0).max() == 1:
-        matched_indices = np.stack(np.where(a), axis=1)
+        iou_matched_indices = np.stack(np.where(a), axis=1)
     else:
-      matched_indices = linear_assignment(-iou_matrix)
+      iou_matched_indices = linear_assignment(-iou_matrix)
   else:
-    matched_indices = np.empty(shape=(0,2))
+    iou_matched_indices = np.empty(shape=(0,2))
 
-  unmatched_detections = []
+  iou_unmatched_detections = []
   for d, det in enumerate(instances):
-    if(d not in matched_indices[:,0]):
-      unmatched_detections.append(d) # list of instances id
-  unmatched_trackers = []
+    if(d not in iou_matched_indices[:,0]):
+      iou_unmatched_detections.append(d) # list of instances id
+  iou_unmatched_trackers = []
   for t, trk in enumerate(trackers):
-    if(t not in matched_indices[:,1]):
-      unmatched_trackers.append(t)
-
+    if(t not in iou_matched_indices[:,1]):
+      iou_unmatched_trackers.append(t)
   #filter out matched with low IOU
-  matches = []
-  for m in matched_indices:
+  iou_matches = []
+  for m in iou_matched_indices:
     if(iou_matrix[m[0], m[1]]<iou_threshold):
-      unmatched_detections.append(m[0])
-      unmatched_trackers.append(m[1])
+      iou_unmatched_detections.append(m[0])
+      iou_unmatched_trackers.append(m[1])
     else:
-      matches.append(m.reshape(1,2))
+      iou_matches.append(m.reshape(1,2))
+
+  # concatenate
+  matches = eu_matches + iou_matches
+  unmatched_detections = eu_unmatched_detections + iou_unmatched_detections
+  unmatched_trackers = eu_unmatched_trackers + iou_unmatched_trackers
   if(len(matches)==0):
     matches = np.empty((0,2),dtype=int)
   else:
@@ -137,6 +190,7 @@ class Sort(object):
 
     if frame == []:
       clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
+      print('empty frame')
     else:
       clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
 
@@ -166,7 +220,6 @@ class Sort(object):
     return np.empty((0,5))
 
 
-
 if __name__ == '__main__':
   # all train
   args = parse_args()
@@ -192,6 +245,7 @@ if __name__ == '__main__':
     track_id_list = []  #gnd
 
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
+  # for frame_idx, frame in enumerate(sequence_segments.item().values()):  
     if frame != []:
       clusters = [instance['points'] for instance in frame.values()]
       class_ids = [instance['class_ID'] for instance in frame.values()]
@@ -200,9 +254,7 @@ if __name__ == '__main__':
       points = np.zeros((1, 6))
       for idx, cluster in enumerate(clusters): 
         class_id = class_ids[idx]
-        # print(cluster.shape)
         cluster = cluster.numpy().squeeze(axis=0)
-        # print(cluster.shape)
         num_row = cluster.shape[0]
         class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
         cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
@@ -249,13 +301,11 @@ if __name__ == '__main__':
     total_time += cycle_time
 
     for tracked_instance, tracker_id in tracked_instances:
-      # print('tracked instance')
       if(display):
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]
         ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
     ax2.set_xlabel('y_cc/m')
-    # ax2.set_ylabel('x_cc/m')
     ax2.set_xlim(50, -50)
     ax2.set_ylim(0, 100)
     ax2.set_title('Tracking')
