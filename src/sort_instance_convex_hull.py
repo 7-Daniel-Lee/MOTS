@@ -84,7 +84,6 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
   for idx in reversed(trackers_idx):
     trackers.pop(idx)
   
-  # if len(instances_less_2) and len(trackers_less_2):
   # associate intances that are less than three points
   euclidean_matrix = get_cost(instances_less_2, trackers_less_2)
   if min(euclidean_matrix.shape) > 0:
@@ -113,8 +112,7 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
     else:
       eu_matches.append(m.reshape(1,2))
 
-  # if len(instances) and len(trackers):
-    # associate instances that are more than three points
+  # associate instances that are more than three points
   iou_matrix = iou_batch(instances, trackers)
   if min(iou_matrix.shape) > 0:
     a = (iou_matrix > iou_threshold).astype(np.int32)
