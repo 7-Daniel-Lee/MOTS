@@ -201,8 +201,10 @@ def features_from_radar_data(radar_data):
         X[radar_point_index][1] = radar_data[radar_point_index]["y_cc"] #in m, position of the detection in the car-coordinate system (origin is at the center of the rear-axle)
         X[radar_point_index][2] = radar_data[radar_point_index]["vr_compensated"] #in m/s: Radial velocity for this detection but compensated for the ego-motion
         X[radar_point_index][3] = radar_data[radar_point_index]["rcs"] #in dBsm, Radar Cross Section value of the detection
-        X[radar_point_index][4] = radar_data[radar_point_index]["timestamp"] # this information is required for LSTM training, but not pointnets
-    return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
+        X[radar_point_index][4] = int(radar_data[radar_point_index]["track_id"], 16)
+        # X[radar_point_index][4] = int(radar_data[radar_point_index]["uuid"], 16)
+    return X
+    # return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
 
 
 def radar_scenes_dataset(datasetdir: str):
@@ -263,7 +265,7 @@ def get_valid_points(scene, non_static = False):
         non_static_y_true = y_true[non_static_points]  # only keep the labels for valid points
         non_static_id_true = id_true[non_static_points]
         X = features_from_radar_data(radar_data[non_static_points]) #get the features from radar_data
-        Y = np.row_stack((non_static_y_true, non_static_id_true))
+        Y = np.row_stack((non_static_y_true, non_static_id_true))   # it contains track_id already！！！！！！
     else:
         X = features_from_radar_data(radar_data)  # get the features from radar_data
         Y = np.row_stack((y_true, id_true))
@@ -337,8 +339,8 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, non_static = F
 
         index_prior =  index_post #update frame_index
 
-    train_number = int(len(data) * 0.8) #
-    validation_number = int(len(data) * 0.1) #
+    train_number = int(len(data) * 0) #.8
+    validation_number = int(len(data) * 0) #.1
     keys = list(range(len(data)))
     train_data = {}
     train_label = {}
@@ -500,19 +502,10 @@ def get_test_data(path_to_dir, non_static=False):
     return test_dataset, test_label
 
 
-def label_bytes2int(labels):  # 将bytes类型转化为int类型
-    labels_int = np.zeros(labels.shape) - 1  # 初始化为全-1的矩阵
-    n = 0
-    for idx in range(len(labels[0])):
-        labels_int[0, idx] = int(labels[0, idx])  # label_id直接转化
-        if labels_int[1, idx] == -1:  # 如果uuid没有被编号
-            tmp = labels[1, idx]  # 取出uuid
-            while tmp in labels[1]:  # 找到所有相同uuid，编上相同编号
-                loc = list(labels[1]).index(tmp)
-                labels[1, loc] = None  # 找过了，标记为None
-                labels_int[1, loc] = n
-            n += 1  # 下一个编号
-    return labels_int
+def hex_dex(trackid):
+    return int(trackid, 16)
+    
+
 
 
 class Radar_Scenes_Validation_Dataset(Dataset):
@@ -593,6 +586,8 @@ class Radar_Scenes_Test_Dataset(Dataset):
         # get the original data
         points = self.test_dataset[frame_index]  # read out the points contained  in this frame
         labels = self.test_label[frame_index]  # read out the labels contained in this frame
+        labels[1, :] =  np.array(list(map(hex_dex, labels[1, :])))
+        labels = labels.astype(float)
 
         num_points = len(points)  # how many points are contained in this frame
         if num_points == 0:
@@ -611,7 +606,6 @@ class Radar_Scenes_Test_Dataset(Dataset):
         selected_points = points[selected_point_idxs, :]
         # only take the sampled points in order to keep things of uniform size
         selected_labels = labels[:, selected_point_idxs]
-        selected_labels = label_bytes2int(selected_labels)
 
         # transform the selected points, augmentation
         if self.transforms is not None:
@@ -641,14 +635,14 @@ if __name__ == "__main__":
     '''
     args = parse_args()
     
-    radar_scenes_dataset = Radar_Scenes_Validation_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
-    validationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
-    num_empty_frames = 0
-    for idx, (features, label) in enumerate(validationDataLoader):
-        if features.numel() == 1:
-            print('frame id', idx, 'is empty')
-            num_empty_frames += 1
-    print("{}%% frames in the validation set is empty".format(100*num_empty_frames/idx))
+    # radar_scenes_dataset = Radar_Scenes_Validation_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
+    # validationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
+    # num_empty_frames = 0
+    # for idx, (features, label) in enumerate(validationDataLoader):
+    #     if features.numel() == 1:
+    #         print('frame id', idx, 'is empty')
+    #         num_empty_frames += 1
+    # print("{}%% frames in the validation set is empty".format(100*num_empty_frames/idx))
     
     radar_scenes_testset = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
     testDataLoader = DataLoader(radar_scenes_testset, batch_size=1, shuffle=False, num_workers=4)
