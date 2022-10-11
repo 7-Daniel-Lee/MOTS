@@ -324,90 +324,66 @@ if __name__ == '__main__':
   mot_tracker = Sort(max_age=args.max_age, 
                       min_hits=args.min_hits,
                       distance_threshold=args.distance_threshold) #create instance of the SORT tracker
-  if(display):
-    plt.ion()
-    fig = plt.figure()
-    ax1 = fig.add_subplot(121, aspect='equal')
-    ax2 = fig.add_subplot(122, aspect='equal')
-    track_id_list = []  #gnd
-
-  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
-    if frame != []:
-      clusters = [instance['points'] for instance in frame.values()]
-      class_ids = [instance['class_ID'] for instance in frame.values()]
-      track_ids = [instance['track_id'] for instance in frame.values()]
   
-      # points = np.zeros((1, 6)) # initialize first row, will be deleted later
-      # for idx, cluster in enumerate(clusters): 
-      #   class_id = class_ids[idx]
-      #   cluster = cluster.numpy().squeeze(axis=0)
-        
-      #   num_row = cluster.shape[0]
-      #   class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大 ???
-      #   cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
-      #   points = np.concatenate((points, cluster_with_class), axis=0)
-      # points = np.delete(points, 0, axis=0) # delte the first row
-    
-      if(display):
-        # display gnd instances with scatter plot in ego-vehicle coordinate        
-        for cluster_id, cluster in enumerate(clusters):
-          track_id_array = track_ids[cluster_id]
-          for i in range(cluster.shape[1]):
-            y = cluster[:, i, 0]  # x_cc
-            x = cluster[:, i, 1]  # y_cc
-            try:
-              track_id = track_id_array[i]
-            except IndexError: # in case track_id_array has only one element
-              track_id = track_id_array.item()
-            if track_id not in track_id_list:
-              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
-              track_id_list.append(track_id)
-            else:
-              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
-            ax1.scatter(x, y, c=color, s=7)  
-        ax1.set_xlabel('y_cc/m')
-        ax1.set_ylabel('x_cc/m')
-        ax1.set_xlim(50, -50)
-        ax1.set_ylim(0, 100)
-        ax1.set_title('Segmentation')
-    else:
-      # points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
-
-      if(display):
-        # empty frame
-        ax1.set_xlabel('y_cc/m')
-        ax1.set_ylabel('x_cc/m')
-        ax1.set_xlim(50, -50)
-        ax1.set_ylim(0, 100)        
- 
-
+  TP, FP, FN, IDSW = 0, 0, 0, 0
+  prev_gnd2hyp = {}
+  prev_track_ids = []
+  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     start_time = time.time()
     tracked_instances = mot_tracker.update(frame)
     print('number of clusters:', len(tracked_instances))
     cycle_time = time.time() - start_time
     total_time += cycle_time
+    
+    tp, idsw = 0, 0
+    if len(tracked_instances) == 0:
+      FN += len(frame.values()) # false negative
+      continue
 
-    if(display):
+    if frame == []:
+      # frame is empty
+      FP += len(tracked_instances)
+      continue
+    else:
+      gnd2hyp = {} # record gnd's corresponding hypothesis track id
+      track_ids = []
       for tracked_instance, tracker_id in tracked_instances:
-        print(tracker_id)
-        tracked_points = tracked_instance['points']
-        color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
-        ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
-      ax2.set_xlabel('y_cc/m')
-      ax2.set_xlim(50, -50)
-      ax2.set_ylim(0, 100)
-      ax2.set_title('Tracking')  
-      
-      if args.save: # save images
-        plt.savefig('img/{}.jpg'.format(frame_idx))
+        tracked_points = tracked_instance['points'].numpy() 
+        hep_track_id = tracker_id
+        for instance in frame.values():
+          gnd_points = instance['points'].numpy() 
+          class_id = instance['class_ID'] 
+          try:
+            track_id = str(int(instance['track_id'][0].numpy()))
+          except IndexError:
+            track_id = str(int(instance['track_id'].item()))
+          track_ids.append(track_id)
 
-      fig.canvas.flush_events()
-      plt.show() 
-      plt.pause(.1)
-      if args.verbose:
-        input("Press Enter to Continue")
-      ax1.cla()
-      ax2.cla()
+          # find matching
+          if np.array_equal(tracked_points, gnd_points):
+            tp += 1
+            gnd2hyp.update({track_id:tracker_id})
+            # id switch
+            if prev_track_ids and prev_gnd2hyp:
+              if track_id in prev_track_ids and prev_gnd2hyp[track_id] != tracker_id:
+                idsw += 1
+            break
+          
+    prev_frame = frame    
+    prev_track_ids = track_ids
+    prev_gnd2hyp = gnd2hyp
+
+    TP += tp
+    FN += len(frame.values()) - tp
+    FP += len(tracked_instances) - tp
+    IDSW += idsw
+  
+  mota = (TP - FP - IDSW) / np.maximum(1.0, TP + FN)
+    
+
+
+      
+      
 
 # export PYTHONPATH=.
 # python src/sort_instance_Euclidean.py -v
