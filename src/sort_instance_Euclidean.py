@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 from logging import basicConfig, DEBUG, INFO
 from tqdm import tqdm
 import time
+
+import torch
 import argparse
 from filterpy.kalman import KalmanFilter
 from sklearn import cluster
@@ -245,22 +247,24 @@ class Sort(object):
     NOTE: The number of objects returned may differ from the number of detections provided.
     """
     self.frame_count += 1
+    if frame == []:
+      return
     # get predicted locations from existing trackers, associate the detections with predictions  
     trks = []  
-    to_del = []
+    # to_del = []
     ret = []
     for t in range(len(self.trackers)):
-      pred = self.trackers[t].predict(frame)['points'] # ndarray
+      pred = self.trackers[t].predict(frame)['points'] # ndarray  主要问题是1312´帧是空的!!
       trks.append(pred)
-      if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
-        to_del.append(t)
-    for t in reversed(to_del):
-      self.trackers.pop(t)
+    #   if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 似乎是多余的？因为只要frame不空，一定能返回一个cluster
+    #     to_del.append(t)
+    # for t in reversed(to_del):
+    #   self.trackers.pop(t)
 
-    if frame == []:
-      clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
-    else:
-      clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
+    # if frame == []:
+    #   clusters = [torch.from_numpy(np.array([[[1e4, 1e4, 1e4, 1e4]]]))]
+    # else:
+    clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
 
     matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
     # 可以分别做2次association,小于两个点的用距离，大于的用IOU
@@ -310,8 +314,8 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  # display = args.display
-  display = True
+  display = args.display
+  # display = True
   phase = args.phase
   total_time = 0.0
 
@@ -383,7 +387,7 @@ if __name__ == '__main__':
 
     start_time = time.time()
     tracked_instances = mot_tracker.update(frame)
-    print('number of clusters:', len(tracked_instances))
+    # print('number of clusters:', len(tracked_instances))
     cycle_time = time.time() - start_time
     total_time += cycle_time
 
