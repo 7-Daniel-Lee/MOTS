@@ -335,11 +335,11 @@ if __name__ == '__main__':
     ax2 = fig.add_subplot(122, aspect='equal')
     track_id_list = []  #gnd
 
-  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
+  for frame_idx, frame in tqdm(enumerate(sequence_segments.item())):  
     if frame != []:
-      clusters = [instance['points'] for instance in frame.values()]
-      class_ids = [instance['class_ID'] for instance in frame.values()]
-      track_ids = [instance['track_id'] for instance in frame.values()]
+      clusters = [instance['points'] for instance in frame['seg_instances'].values()]
+      class_ids = [instance['class_ID'] for instance in frame['seg_instances'].values()]
+      track_ids = [instance['track_id'] for instance in frame['seg_instances'].values()]
   
       # points = np.zeros((1, 6)) # initialize first row, will be deleted later
       # for idx, cluster in enumerate(clusters): 

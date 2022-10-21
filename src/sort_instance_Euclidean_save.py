@@ -338,11 +338,11 @@ if __name__ == '__main__':
     cycle_time = time.time() - start_time
     total_time += cycle_time
     
-    tp, idsw = 0, 0
+    tp, idsw = 0, 0  if np.array_equal(tracked_points, gnd_points):  #???? tracker input : segment
 
     if frame == []:
       # frame is empty
-      FP += len(tracked_instances)
+      FP += len(tracked_instances)  # which will always be 0
       continue
     elif len(tracked_instances) == 0:
       FN += len(frame.values()) # false negative
@@ -350,9 +350,8 @@ if __name__ == '__main__':
     else:
       gnd2hyp = {} # record gnd's corresponding hypothesis track id
       track_ids = []
-      for tracked_instance, tracker_id in tracked_instances:
+      for tracked_instance, hypothesis_id in tracked_instances:
         tracked_points = tracked_instance['points'].numpy() 
-        hep_track_id = tracker_id
         for instance in frame.values():
           gnd_points = instance['points'].numpy() 
           class_id = instance['class_ID'] 
@@ -363,16 +362,16 @@ if __name__ == '__main__':
           track_ids.append(track_id)
 
           # find matching
-          if np.array_equal(tracked_points, gnd_points):
+          if np.array_equal(tracked_points, gnd_points):  #???? tracker input : segment
             tp += 1
-            gnd2hyp.update({track_id:tracker_id})
+            gnd2hyp.update({track_id:hypothesis_id})
             # id switch
             if prev_track_ids and prev_gnd2hyp:
-              if track_id in prev_track_ids and prev_gnd2hyp[track_id] != tracker_id:
+              if track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id:
                 idsw += 1
             break
           
-    prev_frame = frame    
+    # prev_frame = frame    
     prev_track_ids = track_ids
     prev_gnd2hyp = gnd2hyp
 
@@ -381,13 +380,15 @@ if __name__ == '__main__':
     FP += len(tracked_instances) - tp
     IDSW += idsw
   
-  mota = (TP - FP - IDSW) / np.maximum(1.0, TP + FN)
+  motsa = (TP - FP - IDSW) / np.maximum(1.0, TP + FN)
 
-  print(mota)
+  print(motsa)
     
 
+# MOTSP, sPTQ
 
-      
+
+# 0.6299843287480411  seq109      
       
 
 # export PYTHONPATH=.

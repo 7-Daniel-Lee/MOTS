@@ -269,6 +269,20 @@ if __name__ == '__main__':
         else:
             detection_points_with_semantic_information = remove_duplication_detection_points_with_semantic_information(duplicated_detection_points_with_semantic_information)
             detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information # label: [1, 2, N] label_id, track_id
+
+            #******************************************************************
+            gnd_instances = {}
+            # create a set of track id
+            try:
+                track_ids = set(np.squeeze(label[:, 1, :].numpy()))
+            except TypeError:
+                track_ids = [np.reshape(np.squeeze(label[:, 1, :].numpy()), (1,))[0]]
+            # gnd instances
+            for ins_id, track_id in enumerate(track_ids):
+                idx = np.where(np.squeeze(label[:, 1, :].numpy())==track_id) 
+                gnd_instances[track_id] =  detection_points[0, idx,:].numpy()
+            #*****************************************************************
+
             # illustration_points(detection_points)
             eps_list = [2.5, 1, 2, 2, 7]
             minpts_list = [1, 1, 1, 1, 2]
@@ -298,7 +312,7 @@ if __name__ == '__main__':
                     idx = np.where(pred_class == ins_id_class)  
                     instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :], 'track_id': np.squeeze(label[:, 1, idx])}
                 start_ins_id = max(pred_class)
-        frames[frame_id] = instances
+        frames[frame_id] = {'seg instances':instances, 'gnd instances':gnd_instances}
         frame_id += 1 
     # write to file
     np.save('data/SegmentSeq109_trackid.npy', frames)
