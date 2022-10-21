@@ -286,7 +286,7 @@ if __name__ == '__main__':
             # illustration_points(detection_points)
             eps_list = [2.5, 1, 2, 2, 7]
             minpts_list = [1, 1, 1, 1, 2]
-            instances = {}  # keys: instance_id; values: dictionary of all the points and class_id
+            pred_instances = {}  # keys: instance_id; values: dictionary of all the points and class_id
             start_ins_id = 0
             for class_id in range(args.numclasses):
                 mask = pred_label[0, 0, :] == class_id
@@ -310,9 +310,9 @@ if __name__ == '__main__':
                     ins_id = ins_id_class + start_ins_id - 1
                     # extract all the points of that instance ID
                     idx = np.where(pred_class == ins_id_class)  
-                    instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :], 'track_id': np.squeeze(label[:, 1, idx])}
+                    pred_instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :], 'track_id': np.squeeze(label[:, 1, idx])}
                 start_ins_id = max(pred_class)
-        frames[frame_id] = {'seg instances':instances, 'gnd instances':gnd_instances}
+        frames[frame_id] = {'seg instances':pred_instances, 'gnd instances':gnd_instances}
         frame_id += 1 
     # write to file
     np.save('data/SegmentSeq109_trackid.npy', frames)

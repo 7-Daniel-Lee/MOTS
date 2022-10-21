@@ -314,8 +314,8 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  display = args.display
-  # display = True
+  # display = args.display
+  display = True
   phase = args.phase
   total_time = 0.0
 
@@ -335,27 +335,17 @@ if __name__ == '__main__':
     ax2 = fig.add_subplot(122, aspect='equal')
     track_id_list = []  #gnd
 
-  for frame_idx, frame in tqdm(enumerate(sequence_segments.item())):  
+  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     if frame != []:
-      clusters = [instance['points'] for instance in frame['seg_instances'].values()]
-      class_ids = [instance['class_ID'] for instance in frame['seg_instances'].values()]
-      track_ids = [instance['track_id'] for instance in frame['seg_instances'].values()]
-  
-      # points = np.zeros((1, 6)) # initialize first row, will be deleted later
-      # for idx, cluster in enumerate(clusters): 
-      #   class_id = class_ids[idx]
-      #   cluster = cluster.numpy().squeeze(axis=0)
-        
-      #   num_row = cluster.shape[0]
-      #   class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大 ???
-      #   cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
-      #   points = np.concatenate((points, cluster_with_class), axis=0)
-      # points = np.delete(points, 0, axis=0) # delte the first row
-    
+      pred_clusters = [instance['points'] for instance in frame['seg instances'].values()]
+      class_ids = [instance['class_ID'] for instance in frame['seg instances'].values()]
+      gnd_clusters = [instance for instance in frame['gnd instances'].values()]
+      gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()]
+      
       if(display):
         # display gnd instances with scatter plot in ego-vehicle coordinate        
-        for cluster_id, cluster in enumerate(clusters):
-          track_id_array = track_ids[cluster_id]
+        for cluster_id, cluster in enumerate(gnd_clusters):
+          track_id_array = gnd_track_ids[cluster_id]
           for i in range(cluster.shape[1]):
             y = cluster[:, i, 0]  # x_cc
             x = cluster[:, i, 1]  # y_cc

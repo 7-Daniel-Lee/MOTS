@@ -622,7 +622,7 @@ class Radar_Scenes_Test_Dataset(Dataset):
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='Dataset generator')
-    parser.add_argument('--datapath', help='File path of RadarScenes', type=str, default='../../RadarScenes/datashort')
+    parser.add_argument('--datapath', help='File path of RadarScenes', type=str, default='../data_short')   ##
     args = parser.parse_args()
     return args
 
