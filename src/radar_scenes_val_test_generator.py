@@ -339,7 +339,7 @@ def radar_scenes_partitioned_data_generator(path_to_dataset: str, non_static = F
 
         index_prior =  index_post #update frame_index
 
-    train_number = int(len(data) * 0) #.8
+    train_number = int(len(data) * 0) #.8  # data generated in synchronize_global_coordinate_to_anchor_coordinate
     validation_number = int(len(data) * 0) #.1
     keys = list(range(len(data)))
     train_data = {}
