@@ -107,7 +107,6 @@ venv.bak/
 .idea/
 
 Porject_1
-instance_seg
 data/train
 src/*.ipynb
 tracking
