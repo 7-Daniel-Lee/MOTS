@@ -20,7 +20,7 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
-from distance import euclidean_distance
+from distances import euclidean_distance
 
 np.random.seed(0)
 
@@ -297,7 +297,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument('-s', '--save', dest='save', help='Save each frame of the animation', action='store_true')
-    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
+    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data_short')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
@@ -322,7 +322,7 @@ if __name__ == '__main__':
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109_trackid.npy')
+  segments_path = os.path.join(args.seq_path, phase, 'Seq109_gnd&seg.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -346,7 +346,7 @@ if __name__ == '__main__':
         # display gnd instances with scatter plot in ego-vehicle coordinate        
         for cluster_id, cluster in enumerate(gnd_clusters):
           track_id_array = gnd_track_ids[cluster_id]
-          for i in range(cluster.shape[1]):
+          for i in range(cluster.shape[-1]):
             y = cluster[:, i, 0]  # x_cc
             x = cluster[:, i, 1]  # y_cc
             try:
@@ -372,36 +372,43 @@ if __name__ == '__main__':
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
-        ax1.set_ylim(0, 100)        
- 
+        ax1.set_ylim(0, 100)   
+    #*****************************
+    fig.canvas.flush_events()
+    plt.show() 
+    plt.pause(.1)
+    if args.verbose:
+      input("Press Enter to Continue")
+    ax1.cla()     
+    #****************************
 
-    start_time = time.time()
-    tracked_instances = mot_tracker.update(frame)
-    # print('number of clusters:', len(tracked_instances))
-    cycle_time = time.time() - start_time
-    total_time += cycle_time
+    # start_time = time.time()
+    # tracked_instances = mot_tracker.update(frame)
+    # # print('number of clusters:', len(tracked_instances))
+    # cycle_time = time.time() - start_time
+    # total_time += cycle_time
 
-    if(display):
-      for tracked_instance, tracker_id in tracked_instances:
-        print(tracker_id)
-        tracked_points = tracked_instance['points']
-        color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
-        ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
-      ax2.set_xlabel('y_cc/m')
-      ax2.set_xlim(50, -50)
-      ax2.set_ylim(0, 100)
-      ax2.set_title('Tracking')  
+    # if(display):
+    #   for tracked_instance, tracker_id in tracked_instances:
+    #     print(tracker_id)
+    #     tracked_points = tracked_instance['points']
+    #     color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
+    #     ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
+    #   ax2.set_xlabel('y_cc/m')
+    #   ax2.set_xlim(50, -50)
+    #   ax2.set_ylim(0, 100)
+    #   ax2.set_title('Tracking')  
       
-      if args.save: # save images
-        plt.savefig('img/{}.jpg'.format(frame_idx))
+    #   if args.save: # save images
+    #     plt.savefig('img/{}.jpg'.format(frame_idx))
 
-      fig.canvas.flush_events()
-      plt.show() 
-      plt.pause(.1)
-      if args.verbose:
-        input("Press Enter to Continue")
-      ax1.cla()
-      ax2.cla()
+      # fig.canvas.flush_events()
+      # plt.show() 
+      # plt.pause(.1)
+      # if args.verbose:
+      #   input("Press Enter to Continue")
+      # ax1.cla()
+    #   ax2.cla()
 
 # export PYTHONPATH=.
 # python src/sort_instance_Euclidean.py -v
