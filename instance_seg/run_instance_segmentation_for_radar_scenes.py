@@ -9,18 +9,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from instance_seg.pointnet2_sem_seg import get_pointnet2_for_semantic_segmentation_model, get_gmlp_based_pointnet2_for_semantic_segmentation_model,\
     get_external_attention_based_pointnet2_for_semantic_segmentation_model
-<<<<<<< HEAD:src/save_insSeg_gnd.py
 from src.radar_scenes_val_test_generator import Radar_Scenes_Test_Dataset
 
-=======
-#    , get_self_attention_based_pointnet2_for_semantic_segmentation_model
-#from model.pointnet2_ins_seg import get_pointnet2_for_instance_segmentation_model, get_gmlp_based_pointnet2_for_instance_segmentation_model
-# from utils.network_validation import group_proposals_generation_and_merging
-from instance_seg.radar_scenes_dataset_generator import Radar_Scenes_Test_Dataset
-from instance_seg.train_pointnets_for_semantic_segmentation_radar_scenes import parse_args
-# import train_pointnets_for_instance_segmentation_radar_scenes
-#from train_random_forest import ExtractFeatures
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
 
 '''
 %% ----------------------------------- Run different approaches to implement instance segmentation for radar detection points ------------------------------ %%
@@ -180,19 +170,12 @@ def mAP_for_clustering_with_semantic_information(label, pred_label, pred_instanc
 def pretrained_pointnet2_for_semantic_segmentation_model(model, dataLoader, dataset_D, device):
     for duplicated_detection_points_with_uuid, label in dataLoader:
         # print(duplicated_detection_points[0, :20, :])
-<<<<<<< HEAD:src/save_insSeg_gnd.py
         if duplicated_detection_points_with_uuid.numel() == 1:
             yield None
         else:
             with torch.no_grad():
                 duplicated_detection_points = duplicated_detection_points_with_uuid[:, :, 0:4]    
                 # print(duplicated_detection_points)
-=======
-        if duplicated_detection_points.numel() == 1:
-            yield None
-        else:
-            with torch.no_grad():
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
                 duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, C, N]
                 duplicated_detection_points = duplicated_detection_points.float().to(device)
                 detection_points_semantic_segmentor = model.eval()  # Put network in evaluation mode
@@ -202,15 +185,9 @@ def pretrained_pointnet2_for_semantic_segmentation_model(model, dataLoader, data
                 pred_class = pred_label.max(2)[1]  # Get indices of the maximum log_softmax value, which will be used as predicted class
                 conf_score = pred_label.max(2)[0]  # Get the maximum log_softmax value, which will be used for mAP calculation
                 duplicated_detection_points = duplicated_detection_points.permute(0, 2, 1)  # [B, N, C]
-<<<<<<< HEAD:src/save_insSeg_gnd.py
                 # print(duplicated_detection_points_with_uuid.shape, label.shape)  # label:[B, 2, N] pred:[1, N]
                 pred_label = np.row_stack((pred_class, conf_score)).reshape((1, 2, -1))  # 与label保持结构一致
                 duplicated_detection_points_with_semantic_information = (duplicated_detection_points_with_uuid, label, pred_label, pred_center_shift_vectors)
-=======
-                # print(duplicated_detection_points.shape, label.shape, pred.shape)  # label:[B, 2, N] pred:[1, N]
-                pred_label = np.row_stack((pred_class, conf_score)).reshape((1, 2, -1))  # 与label保持结构一致
-                duplicated_detection_points_with_semantic_information = (duplicated_detection_points, label, pred_label, pred_center_shift_vectors)
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
                 yield duplicated_detection_points_with_semantic_information
 
 
@@ -319,13 +296,7 @@ if __name__ == '__main__':
     based clustering algorithms on radar detection points.
     """
     args = parse_args()
-<<<<<<< HEAD:src/save_insSeg_gnd.py
     radar_scenes_test_dataset_duplicated_detection_points = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=200, non_static=True)
-=======
-    radar_scenes_test_dataset_duplicated_detection_points = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=200,
-                                                                                    LSTM=False, non_static=True)
-    """/test_data_without_static.pickle"""
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
     duplicated_detection_points_dataloader = DataLoader(radar_scenes_test_dataset_duplicated_detection_points, batch_size=1,
                                                         shuffle=False, num_workers=0)
 
@@ -370,16 +341,11 @@ if __name__ == '__main__':
     
     frames = {} # iterate over frames
     for duplicated_detection_points_with_semantic_information in tqdm(duplicated_detection_points_with_semantic_information_for_all_frames,
-<<<<<<< HEAD:src/save_insSeg_gnd.py
                                                                       total=len(duplicated_detection_points_dataloader)):
-=======
-                                                                      total=len(duplicated_detection_points_dataloader)): 
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
         if duplicated_detection_points_with_semantic_information is None:
             instances = []
         else:
             detection_points_with_semantic_information = remove_duplication_detection_points_with_semantic_information(duplicated_detection_points_with_semantic_information)
-<<<<<<< HEAD:src/save_insSeg_gnd.py
             detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information # label: [1, 2, N] label_id, track_id
             # detection_points [1, N, 5]
             
@@ -405,13 +371,6 @@ if __name__ == '__main__':
             eps_list = [2.5, 1, 2, 2, 7]
             minpts_list = [1, 1, 1, 1, 2]
             pred_instances = {}  # keys: instance_id; values: dictionary of all the points and class_id
-=======
-            detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information
-            # illustration_points(detection_points)
-            eps_list = [2.5, 1, 2, 2, 7]
-            minpts_list = [1, 1, 1, 1, 2]
-            instances = {}  # keys: instance_id; values: dictionary of all the points and class_id
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
             start_ins_id = 0
             for class_id in range(args.numclasses):
                 mask = pred_label[0, 0, :] == class_id
@@ -435,18 +394,9 @@ if __name__ == '__main__':
                     ins_id = ins_id_class + start_ins_id - 1
                     # extract all the points of that instance ID
                     idx = np.where(pred_class == ins_id_class)  
-<<<<<<< HEAD:src/save_insSeg_gnd.py
                     pred_instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :].numpy()}
                 start_ins_id = max(pred_class)
         frames[frame_id] = {'seg instances':pred_instances, 'gnd instances':gnd_instances}
         frame_id += 1   # 这里的track—id似乎没用了？
     # write to file
     np.save('data_short/Seq109_gnd&seg.npy', frames)
-=======
-                    instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :]}
-                start_ins_id = max(pred_class)
-        frames[frame_id] = instances
-        frame_id += 1 
-    # write to file
-    np.save('data/SegmentSeq109.npy', frames)
->>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:instance_seg/run_instance_segmentation_for_radar_scenes.py
