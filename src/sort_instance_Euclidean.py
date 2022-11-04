@@ -254,7 +254,7 @@ class Sort(object):
     # to_del = []
     ret = []
     for t in range(len(self.trackers)):
-      pred = self.trackers[t].predict(frame)['points'] # ndarray  主要问题是1312´帧是空的!!
+      pred = self.trackers[t].predict(frame)['points'] # ndarray  
       trks.append(pred)
     #   if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 似乎是多余的？因为只要frame不空，一定能返回一个cluster
     #     to_del.append(t)
@@ -314,8 +314,8 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  # display = args.display
-  display = True
+  display = args.display
+  # display = True
   phase = args.phase
   total_time = 0.0
 
