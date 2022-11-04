@@ -347,6 +347,7 @@ if __name__ == '__main__':
         else:
             detection_points_with_semantic_information = remove_duplication_detection_points_with_semantic_information(duplicated_detection_points_with_semantic_information)
             detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information # label: [1, 2, N] label_id, track_id
+            # detection_points [1, N, 5]
             
             #******************************************************************
             gnd_instances = {}

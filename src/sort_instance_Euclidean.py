@@ -51,8 +51,8 @@ def get_cost(segment_instances:List, tracked_instances:List)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
-      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+      segment_x, segment_y = get_cluster_centeroid(segment_instances[row])
+      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])
       distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
@@ -271,7 +271,7 @@ class Sort(object):
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
+      self.trackers[m[1]].update(clusters[m[0]])   # m is the index for matched clusters
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -340,25 +340,20 @@ if __name__ == '__main__':
       pred_clusters = [instance['points'] for instance in frame['seg instances'].values()]
       class_ids = [instance['class_ID'] for instance in frame['seg instances'].values()]
       gnd_clusters = [instance for instance in frame['gnd instances'].values()]
-      gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()]
+      gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()] # N_cluster * 1
       
       if(display):
         # display gnd instances with scatter plot in ego-vehicle coordinate        
         for cluster_id, cluster in enumerate(gnd_clusters):
-          track_id_array = gnd_track_ids[cluster_id]
-          for i in range(cluster.shape[-1]):
-            y = cluster[:, i, 0]  # x_cc
-            x = cluster[:, i, 1]  # y_cc
-            try:
-              track_id = track_id_array[i]
-            except IndexError: # in case track_id_array has only one element
-              track_id = track_id_array.item()
-            if track_id not in track_id_list:
-              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
-              track_id_list.append(track_id)
-            else:
-              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
-            ax1.scatter(x, y, c=color, s=7)  
+          track_id = gnd_track_ids[cluster_id]
+          X = cluster[:, :, 1]
+          Y = cluster[:, :, 0]
+          if track_id not in track_id_list:
+            color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
+            track_id_list.append(track_id)
+          else:
+            color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
+          ax1.scatter(X, Y, c=color, s=7)  
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
@@ -373,42 +368,33 @@ if __name__ == '__main__':
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)   
-    #*****************************
-    fig.canvas.flush_events()
-    plt.show() 
-    plt.pause(.1)
-    if args.verbose:
-      input("Press Enter to Continue")
-    ax1.cla()     
-    #****************************
+ 
+    # associate instance segmentation
+    start_time = time.time()
+    tracked_instances = mot_tracker.update(frame['seg instances'])
+    cycle_time = time.time() - start_time
+    total_time += cycle_time
 
-    # start_time = time.time()
-    # tracked_instances = mot_tracker.update(frame)
-    # # print('number of clusters:', len(tracked_instances))
-    # cycle_time = time.time() - start_time
-    # total_time += cycle_time
-
-    # if(display):
-    #   for tracked_instance, tracker_id in tracked_instances:
-    #     print(tracker_id)
-    #     tracked_points = tracked_instance['points']
-    #     color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
-    #     ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
-    #   ax2.set_xlabel('y_cc/m')
-    #   ax2.set_xlim(50, -50)
-    #   ax2.set_ylim(0, 100)
-    #   ax2.set_title('Tracking')  
+    if(display):
+      for tracked_instance, tracker_id in tracked_instances:
+        tracked_points = tracked_instance['points']
+        color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
+        ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
+      ax2.set_xlabel('y_cc/m')
+      ax2.set_xlim(50, -50)
+      ax2.set_ylim(0, 100)
+      ax2.set_title('Tracking')  
       
-    #   if args.save: # save images
-    #     plt.savefig('img/{}.jpg'.format(frame_idx))
+      if args.save: # save images
+        plt.savefig('img/{}.jpg'.format(frame_idx))
 
-      # fig.canvas.flush_events()
-      # plt.show() 
-      # plt.pause(.1)
-      # if args.verbose:
-      #   input("Press Enter to Continue")
-      # ax1.cla()
-    #   ax2.cla()
+      fig.canvas.flush_events()
+      plt.show() 
+      plt.pause(.1)
+      if args.verbose:
+        input("Press Enter to Continue")
+      ax1.cla()
+      ax2.cla()
 
 # export PYTHONPATH=.
 # python src/sort_instance_Euclidean.py -v
