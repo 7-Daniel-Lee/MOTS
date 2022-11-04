@@ -4,7 +4,10 @@
 export PYTHONPATH=.
 python src/radar_scenes_dataset_generator.py
 ```
+<<<<<<< HEAD
 Note: if you want fiiltered data for only one sequence, modify `data_short/sequences.json`
+=======
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
 2. Run segmentor on the validation set to get segmented instances and saved in .npy 
 ```
 python src/run_instance_segmentation_for_radar_scenes.py

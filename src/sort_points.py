@@ -20,7 +20,11 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 
+<<<<<<< HEAD
 from distances import euclidean_distance
+=======
+from distance import euclidean_distance
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
 
 np.random.seed(0)
 

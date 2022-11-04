@@ -20,7 +20,11 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
+<<<<<<< HEAD
 from distances import euclidean_distance
+=======
+from distance import euclidean_distance
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
 
 np.random.seed(0)
 
@@ -51,8 +55,13 @@ def get_cost(segment_instances:List, tracked_instances:List)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
+<<<<<<< HEAD
       segment_x, segment_y = get_cluster_centeroid(segment_instances[row])
       tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])
+=======
+      segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
+      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
       distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
@@ -254,7 +263,11 @@ class Sort(object):
     # to_del = []
     ret = []
     for t in range(len(self.trackers)):
+<<<<<<< HEAD
       pred = self.trackers[t].predict(frame)['points'] # ndarray  
+=======
+      pred = self.trackers[t].predict(frame)['points'] # ndarray  主要问题是1312´帧是空的!!
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
       trks.append(pred)
     #   if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 似乎是多余的？因为只要frame不空，一定能返回一个cluster
     #     to_del.append(t)
@@ -271,7 +284,11 @@ class Sort(object):
 
     # update matched trackers with assigned detections
     for m in matched:
+<<<<<<< HEAD
       self.trackers[m[1]].update(clusters[m[0]])   # m is the index for matched clusters
+=======
+      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -297,7 +314,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument('-s', '--save', dest='save', help='Save each frame of the animation', action='store_true')
+<<<<<<< HEAD
     parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data_short')
+=======
+    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
@@ -314,15 +335,24 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
+<<<<<<< HEAD
   display = args.display
   # display = True
+=======
+  # display = args.display
+  display = True
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
   phase = args.phase
   total_time = 0.0
 
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
+<<<<<<< HEAD
   segments_path = os.path.join(args.seq_path, phase, 'Seq109_gnd&seg.npy')
+=======
+  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109_trackid.npy')
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -340,11 +370,16 @@ if __name__ == '__main__':
       pred_clusters = [instance['points'] for instance in frame['seg instances'].values()]
       class_ids = [instance['class_ID'] for instance in frame['seg instances'].values()]
       gnd_clusters = [instance for instance in frame['gnd instances'].values()]
+<<<<<<< HEAD
       gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()] # N_cluster * 1
+=======
+      gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()]
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
       
       if(display):
         # display gnd instances with scatter plot in ego-vehicle coordinate        
         for cluster_id, cluster in enumerate(gnd_clusters):
+<<<<<<< HEAD
           track_id = gnd_track_ids[cluster_id]
           X = cluster[:, :, 1]
           Y = cluster[:, :, 0]
@@ -354,6 +389,22 @@ if __name__ == '__main__':
           else:
             color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
           ax1.scatter(X, Y, c=color, s=7)  
+=======
+          track_id_array = gnd_track_ids[cluster_id]
+          for i in range(cluster.shape[1]):
+            y = cluster[:, i, 0]  # x_cc
+            x = cluster[:, i, 1]  # y_cc
+            try:
+              track_id = track_id_array[i]
+            except IndexError: # in case track_id_array has only one element
+              track_id = track_id_array.item()
+            if track_id not in track_id_list:
+              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
+              track_id_list.append(track_id)
+            else:
+              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
+            ax1.scatter(x, y, c=color, s=7)  
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
@@ -367,16 +418,29 @@ if __name__ == '__main__':
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
+<<<<<<< HEAD
         ax1.set_ylim(0, 100)   
  
     # associate instance segmentation
     start_time = time.time()
     tracked_instances = mot_tracker.update(frame['seg instances'])
+=======
+        ax1.set_ylim(0, 100)        
+ 
+
+    start_time = time.time()
+    tracked_instances = mot_tracker.update(frame)
+    # print('number of clusters:', len(tracked_instances))
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
     cycle_time = time.time() - start_time
     total_time += cycle_time
 
     if(display):
       for tracked_instance, tracker_id in tracked_instances:
+<<<<<<< HEAD
+=======
+        print(tracker_id)
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
         ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)

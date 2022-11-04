@@ -202,6 +202,10 @@ def features_from_radar_data(radar_data):
         X[radar_point_index][2] = radar_data[radar_point_index]["vr_compensated"] #in m/s: Radial velocity for this detection but compensated for the ego-motion
         X[radar_point_index][3] = radar_data[radar_point_index]["rcs"] #in dBsm, Radar Cross Section value of the detection
         X[radar_point_index][4] = int(radar_data[radar_point_index]["track_id"], 16)
+<<<<<<< HEAD:src/radar_scenes_val_test_generator.py
+=======
+        # X[radar_point_index][4] = int(radar_data[radar_point_index]["uuid"], 16)
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:src/radar_scenes_dataset_generator.py
     return X
     # return X[:,0:4] #only take elemenet 1 to 3, noted that the index 4 means until but not included, this can be a point of confusion
 
@@ -621,7 +625,11 @@ class Radar_Scenes_Test_Dataset(Dataset):
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='Dataset generator')
+<<<<<<< HEAD:src/radar_scenes_val_test_generator.py
     parser.add_argument('--datapath', help='File path of RadarScenes', type=str, default='data_short')   ##
+=======
+    parser.add_argument('--datapath', help='File path of RadarScenes', type=str, default='../data_short')   ##
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:src/radar_scenes_dataset_generator.py
     args = parser.parse_args()
     return args
 
@@ -633,7 +641,20 @@ if __name__ == "__main__":
      2.count how many empty frames in the validation set and test set
     '''
     args = parse_args()
+<<<<<<< HEAD:src/radar_scenes_val_test_generator.py
        
+=======
+    
+    # radar_scenes_dataset = Radar_Scenes_Validation_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
+    # validationDataLoader = DataLoader(radar_scenes_dataset, batch_size=1, shuffle=False, num_workers=4)
+    # num_empty_frames = 0
+    # for idx, (features, label) in enumerate(validationDataLoader):
+    #     if features.numel() == 1:
+    #         print('frame id', idx, 'is empty')
+    #         num_empty_frames += 1
+    # print("{}%% frames in the validation set is empty".format(100*num_empty_frames/idx))
+    
+>>>>>>> d8c4c72f02b67a958e190a3aa4df82769097fb4f:src/radar_scenes_dataset_generator.py
     radar_scenes_testset = Radar_Scenes_Test_Dataset(args.datapath, transforms=None, sample_size=100, non_static=True)
     testDataLoader = DataLoader(radar_scenes_testset, batch_size=1, shuffle=False, num_workers=4)
     num_empty_frames = 0
