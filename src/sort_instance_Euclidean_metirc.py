@@ -328,7 +328,7 @@ if __name__ == '__main__':
                       min_hits=args.min_hits,
                       distance_threshold=args.distance_threshold) #create instance of the SORT tracker
   
-  TP, FP, FN, IDSW = 0, 0, 0, 0
+  TP, FP, FN, IDSW, soft_TP = 0, 0, 0, 0, 0
   prev_gnd2hyp = {}
   prev_track_ids = []
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
@@ -338,7 +338,7 @@ if __name__ == '__main__':
     cycle_time = time.time() - start_time
     total_time += cycle_time
     
-    tp, idsw = 0, 0 
+    tp, idsw, soft_tp = 0, 0, 0 
 
     if frame['gnd instances'] == []:  # 要区分这里是gnd还是seg？？
       # frame is empty
@@ -365,6 +365,7 @@ if __name__ == '__main__':
           # found a match
           track_id = track_ids[idx_max]
           tp += 1
+          soft_tp += iou_max 
           gnd2hyp.update({track_id:hypothesis_id})  # 每个键值对都应该是唯一的，不存在同一个track id对应多个hypothesis id
           # id switch
           if prev_track_ids and prev_gnd2hyp:
@@ -372,34 +373,9 @@ if __name__ == '__main__':
             #pred (m) != ∅ 由  track_id in prev_track_ids保证
             # #  idc−1(m) != idc−1(pred(m) 由 prev_gnd2hyp[track_id] != hypothesis_id 保证
             # 第二层if只是为了防止不出语法错误
-            # try:
-              # pass
-              # print(track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id)
               if track_id in prev_track_ids and track_id in prev_gnd2hyp.keys() and prev_gnd2hyp[track_id] != hypothesis_id:
                 idsw += 1
-            # except KeyError:
-            #   pass
 
-         # 删掉这个gnd ？ list.pop 
-
-      # for tracked_instance, hypothesis_id in tracked_instances:
-      #   tracked_points = tracked_instance['points'] 
-      #   for track_id, gnd_points in frame['gnd instances'].items():                            
-      #     track_ids.append(track_id)
-      #     # find matching with biggest IOU                                                 
-      #     if np.array_equal(tracked_points, gnd_points):  ####  （1）是遍历hypothesis的原因
-      #       tp += 1
-      #       gnd2hyp.update({track_id:hypothesis_id})
-      #       # id switch
-      #       if prev_track_ids and prev_gnd2hyp:
-      #         #c−1(m) != ∅  pred (m) != ∅  
-      #         if track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id:
-      #           #              #  idc−1(m) != idc−1(pred(m)
-      #           idsw += 1
-      #       break # once find a matching gnd with hypothesis, exit the loop
-          
-    # prev_frame = frame    
-    # print(len(prev_track_ids))
     prev_track_ids = track_ids
     prev_gnd2hyp = gnd2hyp
 
@@ -407,10 +383,15 @@ if __name__ == '__main__':
     FN += len(frame.values()) - tp    # FN = {m ∈ M | c−1(m) = ∅}
     FP += len(tracked_instances) - tp # FP = {h ∈ H | c(h) = ∅}
     IDSW += idsw
+    soft_TP += soft_tp
   
   motsa = (TP - FP - IDSW) / np.maximum(1.0, TP + FN)
+  motsp = soft_TP / TP
+  soft_motsa = (soft_TP - FP - IDSW) / np.maximum(1.0, TP + FN)
 
   print(motsa)
+  print(motsp)
+  print(soft_motsa)
     
 
 # MOTSP, sPTQ
@@ -420,3 +401,8 @@ if __name__ == '__main__':
 
 # export PYTHONPATH=.
 # python src/sort_instance_Euclidean.py -v
+
+
+# 0.7961165048543689
+# 0.9934919065951097
+# 0.7886343036178405
