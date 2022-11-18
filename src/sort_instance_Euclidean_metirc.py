@@ -362,22 +362,31 @@ if __name__ == '__main__':
         iou_max = max(iou_list)     
         idx_max = iou_list.index(iou_max)                                            
         if iou_max > 0.5:
+          # found a match
           track_id = track_ids[idx_max]
           tp += 1
-          gnd2hyp.update({track_id:hypothesis_id})
-        # id switch
-        if prev_track_ids and prev_gnd2hyp:
-          #c−1(m) != ∅  pred (m) != ∅  
-          if track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id:
-            #              #  idc−1(m) != idc−1(pred(m)
-            idsw += 1
-        break # once find a matching gnd with hypothesis, exit the loop
+          gnd2hyp.update({track_id:hypothesis_id})  # 每个键值对都应该是唯一的，不存在同一个track id对应多个hypothesis id
+          # id switch
+          if prev_track_ids and prev_gnd2hyp:
+            #在最外层if中c−1(m) != ∅已经得到保证了
+            #pred (m) != ∅ 由  track_id in prev_track_ids保证
+            # #  idc−1(m) != idc−1(pred(m) 由 prev_gnd2hyp[track_id] != hypothesis_id 保证
+            # 第二层if只是为了防止不出语法错误
+            # try:
+              # pass
+              # print(track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id)
+              if track_id in prev_track_ids and track_id in prev_gnd2hyp.keys() and prev_gnd2hyp[track_id] != hypothesis_id:
+                idsw += 1
+            # except KeyError:
+            #   pass
+
+         # 删掉这个gnd ？ list.pop 
 
       # for tracked_instance, hypothesis_id in tracked_instances:
       #   tracked_points = tracked_instance['points'] 
       #   for track_id, gnd_points in frame['gnd instances'].items():                            
       #     track_ids.append(track_id)
-      #     # find matching with biggest IOU                                                     # change to Hungarian algorithm # 如果用匈牙利算法是把hypothesis和gnd匹配，那么就不能用for循环
+      #     # find matching with biggest IOU                                                 
       #     if np.array_equal(tracked_points, gnd_points):  ####  （1）是遍历hypothesis的原因
       #       tp += 1
       #       gnd2hyp.update({track_id:hypothesis_id})
@@ -390,12 +399,13 @@ if __name__ == '__main__':
       #       break # once find a matching gnd with hypothesis, exit the loop
           
     # prev_frame = frame    
+    # print(len(prev_track_ids))
     prev_track_ids = track_ids
     prev_gnd2hyp = gnd2hyp
 
     TP += tp
-    FN += len(frame.values()) - tp
-    FP += len(tracked_instances) - tp
+    FN += len(frame.values()) - tp    # FN = {m ∈ M | c−1(m) = ∅}
+    FP += len(tracked_instances) - tp # FP = {h ∈ H | c(h) = ∅}
     IDSW += idsw
   
   motsa = (TP - FP - IDSW) / np.maximum(1.0, TP + FN)
