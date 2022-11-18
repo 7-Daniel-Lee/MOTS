@@ -32,5 +32,26 @@ def convex_hull_iou(gnd_instance:ndarray, seg_instance:ndarray)->float:
     return iou
 
 
+def cluster_iou(gnd_instance:ndarray, seg_instance:ndarray)->float:
+    num_target = gnd_instance.shape[1]
+    num_pred = seg_instance.shape[1]
+    # ndarray ==> set of tuple
+    
+    target_set = set()
+    for i in range(num_target):
+        x = gnd_instance[:, i, 0][0]
+        y = gnd_instance[:, i, 1][0]
+        target_set.add((x, y))
+        
+    pred_set = set()
+    for i in range(num_pred):
+        x = seg_instance[:, i, 0][0]
+        y = seg_instance[:, i, 1][0]
+        pred_set.add((x, y))
+    
+    num_intersect = len(target_set.intersection(pred_set))
+    num_union = len(target_set.union(pred_set)) + 1e-6  # avoid divided by 0 
+    return num_intersect / num_union
+
 def euclidean_distance(center1_x, center1_y, cetner2_x, center2_y)->float:
        return sqrt((center1_x-cetner2_x)*(center1_x-cetner2_x)+(center1_y-center2_y)*(center1_y-center2_y))

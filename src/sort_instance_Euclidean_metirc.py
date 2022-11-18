@@ -18,7 +18,7 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
-from distances import euclidean_distance
+from distances import euclidean_distance, cluster_iou
 
 np.random.seed(0)
 
@@ -49,8 +49,8 @@ def get_cost(segment_instances:List, tracked_instances:List)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
-      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+      segment_x, segment_y = get_cluster_centeroid(segment_instances[row])
+      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])
       distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
@@ -269,7 +269,7 @@ class Sort(object):
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
+      self.trackers[m[1]].update(clusters[m[0]])   # m is the index for matched clusters
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -296,7 +296,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument('-s', '--save', dest='save', help='Save each frame of the animation', action='store_true')
-    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
+    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data_short')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
@@ -321,7 +321,7 @@ if __name__ == '__main__':
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109_trackid.npy')
+  segments_path = os.path.join(args.seq_path, phase, 'Seq109_gnd&seg.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -333,14 +333,14 @@ if __name__ == '__main__':
   prev_track_ids = []
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     start_time = time.time()
-    tracked_instances = mot_tracker.update(frame)
+    tracked_instances = mot_tracker.update(frame['seg instances'])
 
     cycle_time = time.time() - start_time
     total_time += cycle_time
     
-    tp, idsw = 0, 0  if np.array_equal(tracked_points, gnd_points):  #???? tracker input : segment
+    tp, idsw = 0, 0 
 
-    if frame == []:
+    if frame['gnd instances'] == []:  # 要区分这里是gnd还是seg？？
       # frame is empty
       FP += len(tracked_instances)  # which will always be 0
       continue
@@ -350,26 +350,44 @@ if __name__ == '__main__':
     else:
       gnd2hyp = {} # record gnd's corresponding hypothesis track id
       track_ids = []
-      for tracked_instance, hypothesis_id in tracked_instances:
-        tracked_points = tracked_instance['points'].numpy() 
-        for instance in frame.values():
-          gnd_points = instance['points'].numpy() 
-          class_id = instance['class_ID'] 
-          try:
-            track_id = str(int(instance['track_id'][0].numpy()))
-          except IndexError:
-            track_id = str(int(instance['track_id'].item()))
-          track_ids.append(track_id)
 
-          # find matching
-          if np.array_equal(tracked_points, gnd_points):  #???? tracker input : segment
-            tp += 1
-            gnd2hyp.update({track_id:hypothesis_id})
-            # id switch
-            if prev_track_ids and prev_gnd2hyp:
-              if track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id:
-                idsw += 1
-            break
+      for tracked_instance, hypothesis_id in tracked_instances:
+        tracked_points = tracked_instance['points'] 
+        iou_list = []
+        for track_id, gnd_points in frame['gnd instances'].items():                            
+          track_ids.append(track_id)
+          # find matching with biggest IOU   
+          iou_list.append(cluster_iou(gnd_points, tracked_points)) 
+        # 需要找到最大的作为对应
+        iou_max = max(iou_list)     
+        idx_max = iou_list.index(iou_max)                                            
+        if iou_max > 0.5:
+          track_id = track_ids[idx_max]
+          tp += 1
+          gnd2hyp.update({track_id:hypothesis_id})
+        # id switch
+        if prev_track_ids and prev_gnd2hyp:
+          #c−1(m) != ∅  pred (m) != ∅  
+          if track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id:
+            #              #  idc−1(m) != idc−1(pred(m)
+            idsw += 1
+        break # once find a matching gnd with hypothesis, exit the loop
+
+      # for tracked_instance, hypothesis_id in tracked_instances:
+      #   tracked_points = tracked_instance['points'] 
+      #   for track_id, gnd_points in frame['gnd instances'].items():                            
+      #     track_ids.append(track_id)
+      #     # find matching with biggest IOU                                                     # change to Hungarian algorithm # 如果用匈牙利算法是把hypothesis和gnd匹配，那么就不能用for循环
+      #     if np.array_equal(tracked_points, gnd_points):  ####  （1）是遍历hypothesis的原因
+      #       tp += 1
+      #       gnd2hyp.update({track_id:hypothesis_id})
+      #       # id switch
+      #       if prev_track_ids and prev_gnd2hyp:
+      #         #c−1(m) != ∅  pred (m) != ∅  
+      #         if track_id in prev_track_ids and prev_gnd2hyp[track_id] != hypothesis_id:
+      #           #              #  idc−1(m) != idc−1(pred(m)
+      #           idsw += 1
+      #       break # once find a matching gnd with hypothesis, exit the loop
           
     # prev_frame = frame    
     prev_track_ids = track_ids
@@ -389,7 +407,6 @@ if __name__ == '__main__':
 
 
 # 0.6299843287480411  seq109      
-      
 
 # export PYTHONPATH=.
 # python src/sort_instance_Euclidean.py -v
