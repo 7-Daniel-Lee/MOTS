@@ -1,0 +1,17 @@
+{
+  "n_sequences": 158,
+  "sequences": {
+    "sequence_109": {
+      "category": "train",
+      "n_scenes": 9810,
+      "length": 185.652,
+      "sensors": [
+        "radar_1",
+        "radar_2",
+        "radar_3",
+        "radar_4",
+        "odometry",
+        "camera"
+      ]
+    }  }
+}

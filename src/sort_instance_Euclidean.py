@@ -13,12 +13,14 @@ import matplotlib.pyplot as plt
 from logging import basicConfig, DEBUG, INFO
 from tqdm import tqdm
 import time
+
+import torch
 import argparse
 from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
-from distance import euclidean_distance
+from distances import euclidean_distance
 
 np.random.seed(0)
 
@@ -49,8 +51,8 @@ def get_cost(segment_instances:List, tracked_instances:List)->np.ndarray:
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-      segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
-      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+      segment_x, segment_y = get_cluster_centeroid(segment_instances[row])
+      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])
       distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
@@ -245,29 +247,31 @@ class Sort(object):
     NOTE: The number of objects returned may differ from the number of detections provided.
     """
     self.frame_count += 1
+    if frame == []:
+      return
     # get predicted locations from existing trackers, associate the detections with predictions  
     trks = []  
-    to_del = []
+    # to_del = []
     ret = []
     for t in range(len(self.trackers)):
-      pred = self.trackers[t].predict(frame)['points'] # ndarray
+      pred = self.trackers[t].predict(frame)['points'] # ndarray  
       trks.append(pred)
-      if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
-        to_del.append(t)
-    for t in reversed(to_del):
-      self.trackers.pop(t)
+    #   if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 似乎是多余的？因为只要frame不空，一定能返回一个cluster
+    #     to_del.append(t)
+    # for t in reversed(to_del):
+    #   self.trackers.pop(t)
 
-    if frame == []:
-      clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
-    else:
-      clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
+    # if frame == []:
+    #   clusters = [torch.from_numpy(np.array([[[1e4, 1e4, 1e4, 1e4]]]))]
+    # else:
+    clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
 
     matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
     # 可以分别做2次association,小于两个点的用距离，大于的用IOU
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
+      self.trackers[m[1]].update(clusters[m[0]])   # m is the index for matched clusters
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -293,7 +297,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
     parser.add_argument('-s', '--save', dest='save', help='Save each frame of the animation', action='store_true')
-    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
+    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data_short')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
@@ -310,15 +314,15 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  # display = args.display
-  display = True
+  display = args.display
+  # display = True
   phase = args.phase
   total_time = 0.0
 
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109_trackid.npy')
+  segments_path = os.path.join(args.seq_path, phase, 'Seq109_gnd&seg.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -333,38 +337,23 @@ if __name__ == '__main__':
 
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     if frame != []:
-      clusters = [instance['points'] for instance in frame.values()]
-      class_ids = [instance['class_ID'] for instance in frame.values()]
-      track_ids = [instance['track_id'] for instance in frame.values()]
-  
-      # points = np.zeros((1, 6)) # initialize first row, will be deleted later
-      # for idx, cluster in enumerate(clusters): 
-      #   class_id = class_ids[idx]
-      #   cluster = cluster.numpy().squeeze(axis=0)
-        
-      #   num_row = cluster.shape[0]
-      #   class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大 ???
-      #   cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
-      #   points = np.concatenate((points, cluster_with_class), axis=0)
-      # points = np.delete(points, 0, axis=0) # delte the first row
-    
+      pred_clusters = [instance['points'] for instance in frame['seg instances'].values()]
+      class_ids = [instance['class_ID'] for instance in frame['seg instances'].values()]
+      gnd_clusters = [instance for instance in frame['gnd instances'].values()]
+      gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()] # N_cluster * 1
+      
       if(display):
         # display gnd instances with scatter plot in ego-vehicle coordinate        
-        for cluster_id, cluster in enumerate(clusters):
-          track_id_array = track_ids[cluster_id]
-          for i in range(cluster.shape[1]):
-            y = cluster[:, i, 0]  # x_cc
-            x = cluster[:, i, 1]  # y_cc
-            try:
-              track_id = track_id_array[i]
-            except IndexError: # in case track_id_array has only one element
-              track_id = track_id_array.item()
-            if track_id not in track_id_list:
-              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
-              track_id_list.append(track_id)
-            else:
-              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
-            ax1.scatter(x, y, c=color, s=7)  
+        for cluster_id, cluster in enumerate(gnd_clusters):
+          track_id = gnd_track_ids[cluster_id]
+          X = cluster[:, :, 1]
+          Y = cluster[:, :, 0]
+          if track_id not in track_id_list:
+            color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
+            track_id_list.append(track_id)
+          else:
+            color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
+          ax1.scatter(X, Y, c=color, s=7)  
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
@@ -378,12 +367,11 @@ if __name__ == '__main__':
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
-        ax1.set_ylim(0, 100)        
+        ax1.set_ylim(0, 100)   
  
-
+    # associate instance segmentation
     start_time = time.time()
-    tracked_instances = mot_tracker.update(frame)
-    print('number of clusters:', len(tracked_instances))
+    tracked_instances = mot_tracker.update(frame['seg instances'])
     cycle_time = time.time() - start_time
     total_time += cycle_time
 

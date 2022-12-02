@@ -5,7 +5,6 @@ from __future__ import print_function
 from cmath import nan
 
 import os
-from sys import displayhook
 from turtle import distance
 from typing import List, Tuple
 import numpy as np
@@ -18,7 +17,7 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
-from distance import convex_hull_iou, euclidean_distance
+from distances import convex_hull_iou, euclidean_distance
 from src.sort_instance_Euclidean import find_instance_from_prediction, get_cluster_centeroid, get_mean_doppler_velocity, KalmanBoxTracker, Sort, parse_args
 
 
@@ -48,30 +47,14 @@ def metric_batch(segment_instances:List, tracked_instances:List, association_fla
   cost_matrix = np.zeros((num_seg, num_track))
   for row in range(num_seg):
     for col in range(num_track):
-        if assocation_flag == 'Euclidean':
-            segment_x, segment_y = get_cluster_centeroid(segment_instances[row].numpy())
-            tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col].numpy())
+        if association_flag == 'Euclidean':
+            segment_x, segment_y = get_cluster_centeroid(segment_instances[row])
+            tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])
             distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
             cost_matrix[row, col] = distance
-        elif assocation_flag == 'IOU':
-            cost_matrix[row, col] = -convex_hull_iou(segment_instances[row].numpy(), tracked_instances[col].numpy())
+        elif association_flag == 'IOU':
+            cost_matrix[row, col] = -convex_hull_iou(segment_instances[row], tracked_instances[col])
   return cost_matrix
-
-
-# def iou_batch(segment_instances:List, tracked_instances:List):
-#   """
-#   From SORT: Computes IOU between two instances 
-#   segment_instances:
-#   tracked_instances: 
-#   return IOU matrix, the negative of cost matrix
-#   """
-#   num_seg = len(segment_instances) 
-#   num_track = len(tracked_instances)
-#   iou_matrix = np.zeros((num_seg, num_track))
-#   for row in range(num_seg):
-#     for col in range(num_track):
-#       iou_matrix[row, col] = convex_hull_iou(segment_instances[row].numpy(), tracked_instances[col].numpy())
-#   return iou_matrix
 
 
 def find_instance_from_prediction(pred:np.ndarray, frame:dict)->dict:
@@ -175,8 +158,6 @@ class KalmanBoxTracker(object):
     param: frame: frame at t+1
     return: a instance, dictionary {class_id:xxx, points: ndarray}
     """
-    # if((self.kf.x[6]+self.kf.x[2])<=0):   
-    #   self.kf.x[6] *= 0.0
     self.kf.predict()
     self.age += 1
     if(self.time_since_update>0):
@@ -203,7 +184,7 @@ def associate_detections_to_trackers(instances:List, trackers:List, distance_thr
     return np.empty((0,2),dtype=int), np.arange(len(instances)), np.empty((0,5),dtype=int)  # change!  # 为什么中间那个是arange，其他两个是empty？
     # matched, unmatched_dets, unmatched_trks
 
-  cost_matrix = metric_batch(instances, trackers)
+  cost_matrix = metric_batch(instances, trackers, args.association)
 
   if min(cost_matrix.shape) > 0:
     a = (cost_matrix < distance_threshold).astype(np.int32)
@@ -268,22 +249,22 @@ class Sort(object):
     for t in range(len(self.trackers)):
       pred = self.trackers[t].predict(frame)['points'] # ndarray
       trks.append(pred)
-      if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
-        to_del.append(t)
-    for t in reversed(to_del):
-      self.trackers.pop(t)
+    #   if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 
+    #     to_del.append(t)
+    # for t in reversed(to_del):
+    #   self.trackers.pop(t)
 
-    if frame == []:
-      clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
-    else:
-      clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
+    # if frame == []:
+    #   clusters = [np.array([[[1e4, 1e4, 1e4, 1e4]]])]
+    # else:
+    clusters = [instance['points'] for instance in frame.values()] # a list of ndarray
 
     matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
     # 可以分别做2次association,小于两个点的用距离，大于的用IOU
 
     # update matched trackers with assigned detections
     for m in matched:
-      self.trackers[m[1]].update(clusters[m[0]].numpy())   # m is the index for matched clusters
+      self.trackers[m[1]].update(clusters[m[0]], args.velocity)   # m is the index for matched clusters
 
     # create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
@@ -313,12 +294,13 @@ def parse_args():
                         type=str,
                         default='EuclideanDistance'
     )
+    parser.add_argument('-s', '--save', dest='save', help='Save each frame of the animation', action='store_true')
     parser.add_argument('-v',
                         '--velocity',
                         help='choose trusting the measurement Doppler radial velocity or not',
                         action='store_true')
     parser.add_argument('-d', '--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
-    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data')
+    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='data_short')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
@@ -327,7 +309,7 @@ def parse_args():
                         help="Minimum number of associated detections before track is initialised.", 
                         type=int, default=1)
     parser.add_argument("--distance_threshold", help="Minimum IOU for match.", type=float, default=0.1)
-    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose mode.')
+    parser.add_argument('--verbose', action='store_true', help='Verbose mode.')
     args = parser.parse_args()
     return args
 
@@ -335,15 +317,15 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
-  # display = args.display
-  display = True
+  display = args.display
+  # display = True
   phase = args.phase
   total_time = 0.0
 
   if not os.path.exists('output'):
     os.makedirs('output')
   # load segments
-  segments_path = os.path.join(args.seq_path, phase, 'SegmentSeq109_trackid.npy')
+  segments_path = os.path.join(args.seq_path, phase, 'Seq109_gnd&seg.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
   
   mot_tracker = Sort(max_age=args.max_age, 
@@ -358,37 +340,36 @@ if __name__ == '__main__':
 
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
     if frame != []:
-      clusters = [instance['points'] for instance in frame.values()]
-      class_ids = [instance['class_ID'] for instance in frame.values()]
-      track_ids = [instance['track_id'] for instance in frame.values()]
+      # clusters = [instance['points'] for instance in frame.values()]
+      # class_ids = [instance['class_ID'] for instance in frame.values()]
+      # track_ids = [instance['track_id'] for instance in frame.values()]
+      pred_clusters = [instance['points'] for instance in frame['seg instances'].values()]
+      class_ids = [instance['class_ID'] for instance in frame['seg instances'].values()]
+      gnd_clusters = [instance for instance in frame['gnd instances'].values()]
+      gnd_track_ids = [track_id for track_id in frame['gnd instances'].keys()]
   
-      points = np.zeros((1, 6))
-      for idx, cluster in enumerate(clusters): 
-        class_id = class_ids[idx]
-        cluster = cluster.numpy().squeeze(axis=0)
-        num_row = cluster.shape[0]
-        class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
-        cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
-        points = np.concatenate((points, cluster_with_class), axis=0)
-      points = np.delete(points, 0, axis=0)
+      # points = np.zeros((1, 6))
+      # for idx, cluster in enumerate(gnd_clusters): 
+      #   class_id = class_ids[idx]
+      #   cluster = cluster.squeeze(axis=0)
+      #   num_row = cluster.shape[0]
+      #   class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
+      #   cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
+      #   points = np.concatenate((points, cluster_with_class), axis=0)
+      # points = np.delete(points, 0, axis=0)
     
       if(display):
         # display gnd instances with scatter plot in ego-vehicle coordinate        
-        for cluster_id, cluster in enumerate(clusters):
-          track_id_array = track_ids[cluster_id]
-          for i in range(cluster.shape[1]):
-            y = cluster[:, i, 0]  # x_cc
-            x = cluster[:, i, 1]  # y_cc
-            try:
-              track_id = track_id_array[i]
-            except IndexError:
-              track_id = track_id_array.item()
-            if track_id not in track_id_list:
-              color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
-              track_id_list.append(track_id)
-            else:
-              color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
-            ax1.scatter(x, y, c=color, s=7)  # 
+        for cluster_id, cluster in enumerate(gnd_clusters):
+          track_id = gnd_track_ids[cluster_id]
+          X = cluster[:, :, 1]
+          Y = cluster[:, :, 0]
+          if track_id not in track_id_list:
+            color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
+            track_id_list.append(track_id)
+          else:
+            color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
+          ax1.scatter(X, Y, c=color, s=7)  
         ax1.set_xlabel('y_cc/m')
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
@@ -406,12 +387,12 @@ if __name__ == '__main__':
  
 
     start_time = time.time()
-    tracked_instances = mot_tracker.update(frame)
+    tracked_instances = mot_tracker.update(frame['seg instances'])
     cycle_time = time.time() - start_time
     total_time += cycle_time
 
-    for tracked_instance, tracker_id in tracked_instances:
-      if(display):
+    if(display):
+      for tracked_instance, tracker_id in tracked_instances:
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]
         ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
@@ -419,6 +400,9 @@ if __name__ == '__main__':
     ax2.set_xlim(50, -50)
     ax2.set_ylim(0, 100)
     ax2.set_title('Tracking')
+
+    if args.save: # save images
+        plt.savefig('img/{}.jpg'.format(frame_idx))
 
     fig.canvas.flush_events()
     plt.show() 

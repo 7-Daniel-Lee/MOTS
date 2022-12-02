@@ -18,7 +18,7 @@ from filterpy.kalman import KalmanFilter
 from sklearn import cluster
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
-from distance import euclidean_distance
+from distances import euclidean_distance
 
 np.random.seed(0)
 
@@ -142,9 +142,7 @@ class KalmanBoxTracker(object):
     self.history = []
     self.hits += 1
     self.hit_streak += 1
-    self.kf.x[:2] = get_cluster_centeroid(cluster)  
-    # self.kf.x[2:] = get_mean_doppler_velocity(cluster) # don't trust the measurement, only estimate velocity
-    
+    self.kf.x[:2] = get_cluster_centeroid(cluster)   
 
   def predict(self, frame):
     """
