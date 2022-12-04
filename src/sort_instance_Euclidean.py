@@ -358,7 +358,7 @@ if __name__ == '__main__':
         ax1.set_ylabel('x_cc/m')
         ax1.set_xlim(50, -50)
         ax1.set_ylim(0, 100)
-        ax1.set_title('Segmentation')
+        ax1.set_title('GND')
     else:
       # points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
 

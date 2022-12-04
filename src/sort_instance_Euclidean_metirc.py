@@ -337,10 +337,13 @@ if __name__ == '__main__':
 
     cycle_time = time.time() - start_time
     total_time += cycle_time
+
+    #************************** evaluation start******************
+    # refer to 4. Evaluation Measures in  MOTS: Multi-Object Tracking and Segmentation
     
     tp, idsw, soft_tp = 0, 0, 0 
 
-    if frame['gnd instances'] == []:  # 要区分这里是gnd还是seg？？
+    if frame['gnd instances'] == []:  
       # frame is empty
       FP += len(tracked_instances)  # which will always be 0
       continue

@@ -216,6 +216,7 @@ def parse_args():
     parser = argparse.ArgumentParser('PointNet')
     parser.add_argument('--datapath',           default='../data_short',
                                                                             type=str,   help="dataset main folder")
+    parser.add_argument('--savepath', default='data_short/Seq109_gnd&seg.npy', type=str)
     parser.add_argument('--numclasses',         default=5,  # 6
                         type=int,   help='number of classes in the dataset')
     parser.add_argument('--pointCoordDim',      default=4,                  type=int,
@@ -346,13 +347,13 @@ if __name__ == '__main__':
             instances = []
         else:
             detection_points_with_semantic_information = remove_duplication_detection_points_with_semantic_information(duplicated_detection_points_with_semantic_information)
-            detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information # label: [1, 2, N] label_id, track_id
+            detection_points, label, pred_label, pred_center_shift_vectors = detection_points_with_semantic_information
+            # label: [1, 2, N] label_id, track_id
             # detection_points [1, N, 5]
             
-            #******************************************************************
+            # generate GND instances based on track id
             gnd_instances = {}
             # create a set of track id
-            # print('BEFORE', label[:, 1, :].numpy().shape)
             try:
                 track_ids = set(np.squeeze(label[:, 1, :].numpy()))
             except TypeError:
@@ -360,12 +361,7 @@ if __name__ == '__main__':
             # gnd instances
             for ins_id, track_id in enumerate(track_ids):
                 idx = np.where(np.squeeze(label[:, 1, :].numpy())==track_id) 
-                # print('AFTER', np.squeeze(label[:, 1, :].numpy()))
-                # print(idx)
-                gnd_instances[track_id] =  detection_points[0, idx,:].numpy()    # 就不应该使用detection poinst的数量和位置都和分割后的一模一样，只是可能label不同了？？？
-                # 根据track id进行点的分割
-                # print(gnd_instances[track_id].shape)  # 为什么都只有一个点？？？
-            #*****************************************************************
+                gnd_instances[track_id] =  detection_points[0, idx,:].numpy() 
 
             # illustration_points(detection_points)
             eps_list = [2.5, 1, 2, 2, 7]
@@ -397,6 +393,6 @@ if __name__ == '__main__':
                     pred_instances[ins_id] = {'class_ID': class_id, 'points':features_class[idx, :].numpy()}
                 start_ins_id = max(pred_class)
         frames[frame_id] = {'seg instances':pred_instances, 'gnd instances':gnd_instances}
-        frame_id += 1   # 这里的track—id似乎没用了？
+        frame_id += 1  
     # write to file
-    np.save('data_short/Seq109_gnd&seg.npy', frames)
+    np.save(args.savepath, frames)
