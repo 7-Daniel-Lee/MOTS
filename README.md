@@ -1,4 +1,4 @@
-# Radar_PointNet_Panoptic_Tracking_and_Segmentation
+# Radar_PointNet_Panoptic_Tracking_and_Segmentation (RadarMOTS)
 This repo is regarding the radar-based panoptic segmentation and tracking which is part of the radar-based data processing for ADAS and AD collaboration project. The purpose of this project is to investigate algorithms of radar-based panoptic segmentation and tracking in BEV/3D space.
 
 
