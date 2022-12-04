@@ -41,9 +41,20 @@ There is also an unfinished script that try to combine the four scripts above.
 ```
 ├── src/radarMOTS_instance.py
 ```
+Run the tracker and display an animation.
+```
+export PYTHONPATH=.
+python src/sort_instance_Euclidean.py -d
+```
+![Alt text](img/instance_Euclidean.png)
 
 # Evaluation
 Evaluate the trackers and segmentors jointly by MOTSA, MOTSP, soft MOTSA. Find the definition in *MOTS: Multi-Object Tracking and Segmentation*. 
 ```
 ├── sort_instance_Euclidean_metirc.py
+```
+Get the metrics.
+```
+export PYTHONPATH=.
+python src/sort_instance_Euclidean_metric.py
 ```
