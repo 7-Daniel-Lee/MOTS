@@ -18,6 +18,7 @@ import torch
 import argparse
 from filterpy.kalman import KalmanFilter
 from sklearn import cluster
+from sklearn.cluster import DBSCAN
 from color_scheme import COLOR
 from scipy.optimize import linear_sum_assignment
 from distances import euclidean_distance
@@ -48,12 +49,12 @@ def get_cost(segment_instances:List, tracked_instances:List)->np.ndarray:
   """
   num_seg = len(segment_instances) 
   num_track = len(tracked_instances)
-  cost_matrix = np.zeros((num_seg, num_track))
-  for row in range(num_seg):
-    for col in range(num_track):
+  cost_matrix = np.zeros((num_seg, num_track)) #初始化cost_matrix
+  for row in range(num_seg):   #遍历num_seg的行
+    for col in range(num_track):    #遍历num_track的列
       segment_x, segment_y = get_cluster_centeroid(segment_instances[row])
-      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])
-      distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
+      tracked_x,  tracked_y = get_cluster_centeroid(tracked_instances[col])    #计算出实例分割点中心和跟踪点中心
+      distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y) #利用欧几里得距离算出distance
       cost_matrix[row, col] = distance
   return cost_matrix
 
@@ -65,13 +66,13 @@ def find_instance_from_prediction(pred:np.ndarray, frame:dict)->dict:
   return: optimal_instance: {'class_ID': 0-5, 'points':cluster, 'track_id': n}
   '''
   # empty frame
-  if frame == []:
+  if frame == []: #如果此帧为空
     return 
   pred_x, pred_y = pred[:2]
   min_distance = 1e5
-  optimal_instance = None
-  for instance in frame.values():
-    cluster = instance['points']
+  optimal_instance = None #初始化optimal_instance
+  for instance in frame['seg instances'].values():
+    cluster = instance['points']   #取得seg instances中points的值
     segement_centroid_x, segement_centroid_y = get_cluster_centeroid(cluster)
     distance = euclidean_distance(segement_centroid_x, segement_centroid_y, 
                                   pred_x, pred_y)
@@ -87,6 +88,7 @@ def get_cluster_centeroid(cluster:np.ndarray)->Tuple[float, float]:
   param: cluster: 1*n*4 each row is a point
   return: mass center of all the points
   '''
+  #取相同实例的所有点求centeroid
   x_center = cluster[:, :, 0].mean()
   y_center = cluster[:, :, 1].mean()
   return np.array((x_center, y_center)).reshape((2, 1))
@@ -97,13 +99,14 @@ def get_mean_doppler_velocity(cluster:np.ndarray)->Tuple[float, float]:
   1. decompose each Vr along the x and y axis 2. get the mean Vrx, Vry
   Note: the mean Vr is no longer radial of the mass center
   '''
-  xcc = cluster[:, :, 0]
-  ycc = cluster[:, :, 1]
-  vr = cluster[:, :, 2]
+  #求平均多普勒速度作运动模型的条件
+  xcc = cluster[:, :, 0]  #x坐标
+  ycc = cluster[:, :, 1]  #y坐标
+  vr = cluster[:, :, 2]   #径向速度
   cosine_thetas =  xcc / np.sqrt(xcc*xcc + ycc*ycc)
   sine_thetas = ycc / np.sqrt(xcc*xcc + ycc*ycc)
   vr_x = np.squeeze(vr*cosine_thetas)
-  vr_y = vr*sine_thetas
+  vr_y = vr*sine_thetas    #分解径向速度
   mean_vr_x = np.mean(vr_x)
   mean_vr_y = np.mean(vr_y)
   return np.array((mean_vr_x, mean_vr_y)).reshape((2, 1))
@@ -119,7 +122,7 @@ class KalmanBoxTracker(object):
     Initialises a tracker using initial bounding box.
     """
     #define constant velocity model
-    self.kf = KalmanFilter(dim_x=4, dim_z=2) 
+    self.kf = KalmanFilter(dim_x=4, dim_z=2) #因为输入数据有4个状态，所以dim_x=4,需要观测2个状态，所以dim_z=2
     self.kf.F = np.array([[1,0,1,0],[0,1,0,1],[0,0,1,0],[0,0,0,1]]) # 改成deta t 反应真实速度
     self.kf.H = np.array([[1,0,0,0],[0,1,0,0]])
     # F is the transition matrix with constant velocity motion model, which will be used to multiply with vector [x, y, x_v, y_v]^T in prediction step.
@@ -153,10 +156,11 @@ class KalmanBoxTracker(object):
     self.time_since_update = 0
     self.history = []
     self.hits += 1
-    self.hit_streak += 1
+    self.hit_streak += 1  # the total number of times it consecutively got matched with a detection in the last frames
     self.kf.x[:2] = get_cluster_centeroid(associated_cluster)  
     self.kf.x[2:] = get_mean_doppler_velocity(associated_cluster) 
-    
+    #此处直接赋予关联后的实例的中心点的x,y值以及平均多普勒速度值
+
   def predict(self, frame):
     """
     Advances the state vector and returns the predicted instance
@@ -185,7 +189,7 @@ def associate_detections_to_trackers(instances:List, trackers:List, distance_thr
 
   Returns 3 lists of matches, unmatched_detections and unmatched_trackers
   """
-  if(len(trackers)==0):
+  if(len(trackers)==0):   #如果跟踪器为空
     return np.empty((0,2),dtype=int), np.arange(len(instances)), np.empty((0,5),dtype=int)  # change!  # 为什么中间那个是arange，其他两个是empty？
     # matched, unmatched_dets, unmatched_trks
 
@@ -193,33 +197,37 @@ def associate_detections_to_trackers(instances:List, trackers:List, distance_thr
 
   if min(cost_matrix.shape) > 0:
     a = (cost_matrix < distance_threshold).astype(np.int32)
-    if a.sum(1).max() == 1 and a.sum(0).max() == 1:
+    if a.sum(1).max() == 1 and a.sum(0).max() == 1:  #若在0轴上求和最大值等于1或在1轴上求和最大值等于1
         matched_indices = np.stack(np.where(a), axis=1) # coordinates in the cost matrix
+        #此处为特殊情况，即点在前后帧没有发生过移动
     else:
-      matched_indices = linear_assignment(cost_matrix) # 
+      matched_indices = linear_assignment(cost_matrix) # 通常情况下利用匈牙利算法进行data association
   else:
-    matched_indices = np.empty(shape=(0,2))
+    matched_indices = np.empty(shape=(0,2))    #返回0矩阵
 
+  # 记录未匹配的检测框及跟踪框
+  # 未匹配的检测框放入unmatched_detections中，表示有新的目标进入画面，要新增跟踪器跟踪目标
   unmatched_detections = []
-  for d, det in enumerate(instances):
+  for d, det in enumerate(instances):#如果检测器中第d个检测结果不在匹配结果索引中，则d未匹配上
     if(d not in matched_indices[:,0]):
       unmatched_detections.append(d) # list of instances id
   unmatched_trackers = []
   for t, trk in enumerate(trackers):
     if(t not in matched_indices[:,1]):
-      unmatched_trackers.append(t)
+      unmatched_trackers.append(t)   #如果跟踪器中第t个跟踪结果不在匹配结果索引中，则t未匹配上
 
   #filter out matched with low IOU
-  matches = []
-  for m in matched_indices:
-    if(cost_matrix[m[0], m[1]]>distance_threshold):
+  matches = []  #存放过滤后的匹配结果
+  for m in matched_indices:  #遍历粗匹配结果
+    if(cost_matrix[m[0], m[1]]>distance_threshold):  #m[0]是检测器ID， m[1]是跟踪器ID，如它们的代价矩阵大于阈值则将它们视为未匹配成功
       unmatched_detections.append(m[0])
       unmatched_trackers.append(m[1])
     else:
-      matches.append(m.reshape(1,2))
-  if(len(matches)==0):
+      matches.append(m.reshape(1,2))  #将过滤后的匹配对维度变形成1x2形式
+  if(len(matches)==0):  #如果过滤后匹配结果为空，那么返回空的匹配结果
+    # 初始化matches,以np.array的形式返回
     matches = np.empty((0,2),dtype=int)
-  else:
+  else:  #如果过滤后匹配结果非空，则按0轴方向继续添加匹配对
     matches = np.concatenate(matches,axis=0)
 
   return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
@@ -231,10 +239,10 @@ class Sort(object):
     Sets key parameters for SORT
     """
     self.max_age = max_age
-    self.min_hits = min_hits
-    self.distance_threshold = distance_threshold
+    self.min_hits = min_hits  #  the minimum value of hit streak of a track, required, such that it gets displayed in the outputs.
+    self.distance_threshold = distance_threshold  #距离阈值
     self.trackers = []
-    self.frame_count = 0
+    self.frame_count = 0  #帧计数
 
   def update(self, frame:dict):
     """
@@ -246,20 +254,20 @@ class Sort(object):
 
     NOTE: The number of objects returned may differ from the number of detections provided.
     """
-    self.frame_count += 1
+    self.frame_count += 1  #帧计数
     if frame == []:
       return
     # get predicted locations from existing trackers, associate the detections with predictions  
     trks = []  
-    # to_del = []
-    ret = []
-    for t in range(len(self.trackers)):
-      pred = self.trackers[t].predict(frame)['points'] # ndarray  
+    to_del = []  #存放待删除
+    ret = []  #存放最后返回的结果
+    for t in range(len(self.trackers)):  #循环遍历卡尔曼跟踪器列表
+      pred = self.trackers[t].predict(frame)['points'] # ndarray  #用卡尔曼跟踪器t 预测 对应物体在当前帧中的点
       trks.append(pred)
-    #   if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 似乎是多余的？因为只要frame不空，一定能返回一个cluster
-    #     to_del.append(t)
-    # for t in reversed(to_del):
-    #   self.trackers.pop(t)
+      if np.any(np.isnan(pred.shape)):   # if any of the predictions is Nan, delete the tracker 似乎是多余的？因为只要frame不空，一定能返回一个cluster
+        to_del.append(t)
+    for t in reversed(to_del):#对to_del数组进行倒序遍历
+      self.trackers.pop(t)#从跟踪器中删除 to_del中的上一帧跟踪器ID
 
     # if frame == []:
     #   clusters = [torch.from_numpy(np.array([[[1e4, 1e4, 1e4, 1e4]]]))]
@@ -268,21 +276,21 @@ class Sort(object):
 
     matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
     # 可以分别做2次association,小于两个点的用距离，大于的用IOU
-
+    #对传入的检测结果 与 上一帧跟踪物体在当前帧中预测的结果做关联，返回匹配的目标矩阵matched, 新增目标的矩阵unmatched_dets, 离开画面的目标矩阵unmatched_trks
     # update matched trackers with assigned detections
     for m in matched:
       self.trackers[m[1]].update(clusters[m[0]])   # m is the index for matched clusters
 
     # create and initialise new trackers for unmatched detections
-    for i in unmatched_dets:
+    for i in unmatched_dets:  #新增目标
         trk = KalmanBoxTracker(clusters[i])   # one new tracker for each unmatched cluster   
-        self.trackers.append(trk)
+        self.trackers.append(trk)  #将新创建和初始化的跟踪器trk 传入trackers
     i = len(self.trackers)
-    for trk in reversed(self.trackers):
-        d = trk.get_state(frame) 
+    for trk in reversed(self.trackers):#对新的卡尔曼跟踪器集进行倒序遍历
+        d = trk.get_state(frame) #获取trk跟踪器的状态
         # rule-based track management 持续更新+ 连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):  # there are three trackers, but only one added in the output 
-          ret.append((d, trk.id+1)) # 
+          ret.append((d, trk.id+1)) # +1 as MOT benchmark requires positive
         i -= 1
         # remove dead tracklet
         if(trk.time_since_update > self.max_age):
@@ -314,6 +322,7 @@ def parse_args():
 if __name__ == '__main__':
   # all train
   args = parse_args()
+  args.seq_path = 'C:\\Users\\12283\\Desktop\\SCI\\Radar_PointNet_Panoptic_Tracking_and_Segmentation-main\\Radar_PointNet_Panoptic_Tracking_and_Segmentation-main\\src\\data_short'
   display = args.display
   # display = True
   phase = args.phase
@@ -324,18 +333,18 @@ if __name__ == '__main__':
   # load segments
   segments_path = os.path.join(args.seq_path, phase, 'Seq109_gnd&seg.npy')
   sequence_segments = np.load(segments_path, allow_pickle='TRUE')
-  
+  #打开对应输入文件
   mot_tracker = Sort(max_age=args.max_age, 
                       min_hits=args.min_hits,
                       distance_threshold=args.distance_threshold) #create instance of the SORT tracker
-  if(display):
+  if(display):  #绘制相关图像，数据可视化
     plt.ion()
     fig = plt.figure()
     ax1 = fig.add_subplot(121, aspect='equal')
     ax2 = fig.add_subplot(122, aspect='equal')
     track_id_list = []  #gnd
 
-  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  
+  for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  #从第0帧开始循环遍历每一帧的points,class_ID,tracked_id以及groudtruth的值与键
     if frame != []:
       pred_clusters = [instance['points'] for instance in frame['seg instances'].values()]
       class_ids = [instance['class_ID'] for instance in frame['seg instances'].values()]
@@ -344,10 +353,10 @@ if __name__ == '__main__':
       
       if(display):
         # display gnd instances with scatter plot in ego-vehicle coordinate        
-        for cluster_id, cluster in enumerate(gnd_clusters):
-          track_id = gnd_track_ids[cluster_id]
-          X = cluster[:, :, 1]
-          Y = cluster[:, :, 0]
+        for cluster_id, cluster in enumerate(gnd_clusters):   #在gnd_clusters中遍历
+          track_id = gnd_track_ids[cluster_id]  #由上一行条件定义track_id
+          X = cluster[:, :, 1] # x_cc
+          Y = cluster[:, :, 0] # y_cc
           if track_id not in track_id_list:
             color = COLOR[(len(track_id_list)-1)%NUM_COLOR] # new color
             track_id_list.append(track_id)
@@ -371,12 +380,12 @@ if __name__ == '__main__':
  
     # associate instance segmentation
     start_time = time.time()
-    tracked_instances = mot_tracker.update(frame['seg instances'])
-    cycle_time = time.time() - start_time
-    total_time += cycle_time
+    tracked_instances = mot_tracker.update(frame['seg instances']) #更新sort跟踪器
+    cycle_time = time.time() - start_time #sort跟踪器耗时
+    total_time += cycle_time #sort跟踪器总耗时
 
     if(display):
-      for tracked_instance, tracker_id in tracked_instances:
+      for tracked_instance, tracker_id in tracked_instances:    #遍历新的sort跟踪器结果
         tracked_points = tracked_instance['points']
         color = COLOR[tracker_id%NUM_COLOR]  # the same tracker_id uses the same color
         ax2.scatter(tracked_points[:, :, 1], tracked_points[:, :, 0], c=color, s=7)
@@ -396,5 +405,5 @@ if __name__ == '__main__':
       ax1.cla()
       ax2.cla()
 
-# export PYTHONPATH=.
-# python src/sort_instance_Euclidean.py -v
+#export PYTHONPATH=.
+#python src/sort_instance_Euclidean.py -v
