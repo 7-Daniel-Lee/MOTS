@@ -243,7 +243,7 @@ class Sort(object):
       # rule-based track management 持续更新+连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧
       # if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
       #此处有问题：如果加上此if判断语句的话则无法呈现出第2帧及其之后的帧数，是否为初始参数max_age and min_hit设置的不正确？
-      ret.append(d)
+      ret.append(d)  #添加到待保存列表
       i -= 1
       #delete death track
       if(trk.time_since_update > self.max_age):
