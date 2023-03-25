@@ -280,7 +280,7 @@ class Sort(object):
         d = trk.get_state(frame) 
         # rule-based track management 持续更新+ 连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):  # there are three trackers, but only one added in the output 
-          ret.append((d, trk.id+1)) # 
+          ret.append((d, trk.id+1)) #添加到待保存列表
         i -= 1
         # remove dead tracklet
         if(trk.time_since_update > self.max_age):
@@ -328,7 +328,7 @@ if __name__ == '__main__':
                       min_hits=args.min_hits,
                       distance_threshold=args.distance_threshold) #create instance of the SORT tracker
   
-  TP, FP, FN, IDSW, soft_TP = 0, 0, 0, 0, 0
+  TP, FP, FN, IDSW, soft_TP = 0, 0, 0, 0, 0  #初始化匹配的segments,不匹配的预测段,不匹配的真实段,id切换总数
   prev_gnd2hyp = {}
   prev_track_ids = []
   for frame_idx, frame in tqdm(enumerate(sequence_segments.item().values())):  

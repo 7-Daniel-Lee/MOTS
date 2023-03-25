@@ -45,7 +45,7 @@ def iou_batch(segment_instances:List, tracked_instances:List):
   """
   num_seg = len(segment_instances) 
   num_track = len(tracked_instances)
-  iou_matrix = np.zeros((num_seg, num_track))  #初始化iou_matrix
+  iou_matrix = np.zeros((num_seg, num_track))  #初始化iou_matrix 
   for row in range(num_seg):
     for col in range(num_track):
       iou_matrix[row, col] = convex_hull_iou(segment_instances[row].numpy(), tracked_instances[col].numpy())   #get the minimum convex hull of two clusters, calculate their IoU
@@ -70,22 +70,22 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
   '''
   深度复制，表示后期更改后不会影响现有复制的内容
   '''
-  instances_less_2 = []  #小于两个点的instances
-  trackers_less_2 = []   #小于两个点的trackers
+  instances_less_2 = []  #小于两个点的instances 
+  trackers_less_2 = []   #小于两个点的trackers 
   instances_idx = []
   trackers_idx = []
-  for idx, instance in enumerate(instances):  #循环遍历每一帧的instances
+  for idx, instance in enumerate(instances):  #循环遍历每一帧的instances 
     if instance.shape[1] < 3:
       instances_idx.append(idx)
       instances_less_2.append(instance)
-  for idx in reversed(instances_idx):  #倒序遍历instances_idx
-    instances.pop(idx)  #弹出对应的帧数
-  for idx, tracker in enumerate(trackers):  #循环遍历每一帧的trackers
+  for idx in reversed(instances_idx):  #倒序遍历instances_idx 
+    instances.pop(idx)  #弹出对应的帧数 
+  for idx, tracker in enumerate(trackers):  #循环遍历每一帧的trackers 
     if tracker.shape[1] < 3:
       trackers_idx.append(idx)
       trackers_less_2.append(tracker)
-  for idx in reversed(trackers_idx):  #倒序遍历trackers_idx
-    trackers.pop(idx)   #弹出对应的帧数
+  for idx in reversed(trackers_idx):  #倒序遍历trackers_idx 
+    trackers.pop(idx)   #弹出对应的帧数 
   
   # associate intances that are less than three points
   euclidean_matrix = get_cost(instances_less_2, trackers_less_2)  #定义euclidean_matrix
@@ -94,31 +94,31 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
     if a.sum(1).max() == 1 and a.sum(0).max() == 1:
       eu_matched_indices = np.stack(np.where(a), axis=1)
     else:
-      eu_matched_indices = linear_assignment(euclidean_matrix)   #通常情况下利用匈牙利算法data association
+      eu_matched_indices = linear_assignment(euclidean_matrix)   #通常情况下利用匈牙利算法data association 
   else:
     eu_matched_indices = np.empty(shape=(0,2))
 
-  # 记录未匹配的检测框及跟踪框
-  # 未匹配的检测框放入eu_unmatched_detections中，表示有新的目标进入画面，要新增跟踪器跟踪目标
+  # 记录未匹配的检测框及跟踪框 
+  # 未匹配的检测框放入eu_unmatched_detections中，表示有新的目标进入画面，要新增跟踪器跟踪目标  
   eu_unmatched_detections = []
-  for d, det in enumerate(instances_less_2):  #循环遍历每一帧中的instances_less_2
-    if(d not in eu_matched_indices[:,0]):#如果检测器中第d个检测结果不在匹配结果索引中，则d未匹配上
+  for d, det in enumerate(instances_less_2):  #循环遍历每一帧中的instances_less_2 
+    if(d not in eu_matched_indices[:,0]):#如果检测器中第d个检测结果不在匹配结果索引中，则d未匹配上 
       eu_unmatched_detections.append(d) # list of instances id
   eu_unmatched_trackers = []
-  for t, trk in enumerate(trackers_less_2):  #循环遍历每一帧中的trackers_less_2
-    if(t not in eu_matched_indices[:,1]):#如果跟踪器中第t个跟踪结果不在匹配结果索引中，则t未匹配上
+  for t, trk in enumerate(trackers_less_2):  #循环遍历每一帧中的trackers_less_2 
+    if(t not in eu_matched_indices[:,1]):#如果跟踪器中第t个跟踪结果不在匹配结果索引中，则t未匹配上 
       eu_unmatched_trackers.append(t)
   #filter out matched with large distance
-  eu_matches = []  #存放过滤后的匹配结果
-  for m in eu_matched_indices:  #遍历粗匹配结果
-    if(euclidean_matrix[m[0], m[1]]>distance_threshold):  #m[0]是检测器ID， m[1]是跟踪器ID，如它们的欧几里得代价矩阵大于阈值则将它们视为未匹配成功
+  eu_matches = []  #存放过滤后的匹配结果 
+  for m in eu_matched_indices:  #遍历粗匹配结果 
+    if(euclidean_matrix[m[0], m[1]]>distance_threshold):  #m[0]是检测器ID， m[1]是跟踪器ID，如它们的欧几里得代价矩阵大于阈值则将它们视为未匹配成功 
       eu_unmatched_detections.append(m[0])
       eu_unmatched_trackers.append(m[1])
     else:
-      eu_matches.append(m.reshape(1,2))  #将过滤后的匹配对维度变形成1x2形式
+      eu_matches.append(m.reshape(1,2))  #将过滤后的匹配对维度变形成1x2形式 
 
   # associate instances that are more than three points
-  #同理，利用iou_matrix进行数据关联
+  #同理，利用iou_matrix进行数据关联 
   iou_matrix = iou_batch(instances, trackers)
   if min(iou_matrix.shape) > 0:
     a = (iou_matrix > iou_threshold).astype(np.int32)
@@ -146,7 +146,7 @@ def associate_detections_to_trackers(instances:List, trackers:List, iou_threshol
     else:
       iou_matches.append(m.reshape(1,2))
 
-  # concatenate最终的匹配结果和未匹配结果
+  # concatenate最终的匹配结果和未匹配结果 
   matches = eu_matches + iou_matches
   unmatched_detections = eu_unmatched_detections + iou_unmatched_detections
   unmatched_trackers = eu_unmatched_trackers + iou_unmatched_trackers
@@ -199,7 +199,7 @@ class Sort(object):
       clusters = [instance['points'] for instance in frame['seg instances'].values()] # a list of ndarray
 
     matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(clusters, trks, self.distance_threshold)
-    # 可以分别做2次association,小于两个点的用距离，大于的用IOU
+    # 可以分别做2次association,小于两个点的用距离，大于的用IOU 
 
     # update matched trackers with assigned detections
     for m in matched:
@@ -212,7 +212,7 @@ class Sort(object):
     i = len(self.trackers)
     for trk in reversed(self.trackers):
         d = trk.get_state(frame) 
-        # rule-based track management 持续更新+ 连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧
+        # rule-based track management 持续更新+ 连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧 
         if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):  # there are three trackers, but only one added in the output 
           ret.append((d, trk.id+1)) # 
         i -= 1
@@ -261,7 +261,7 @@ if __name__ == '__main__':
         class_id = class_ids[idx]
         cluster = cluster.numpy().squeeze(axis=0)
         num_row = cluster.shape[0]
-        class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
+        class_id_vec = np.ones((num_row, 1)) * class_id  # 给每个tracker一个class——id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大 
         cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)
         points = np.concatenate((points, cluster_with_class), axis=0)
       points = np.delete(points, 0, axis=0)
