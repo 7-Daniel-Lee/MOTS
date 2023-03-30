@@ -52,39 +52,10 @@ def iou_batch(points:np.ndarray,pred_points:np.array)->np.ndarray:
   for row in range(num_seg):
     for col in range(num_track):
       segment_x, segment_y = points[row, 0:2]
-      tracked_x, tracked_y = points[col, 0:2]
+      tracked_x, tracked_y = pred_points[col, 0:2]
       distance = euclidean_distance(segment_x, segment_y, tracked_x, tracked_y)
       cost_matrix[row, col] = distance
   return cost_matrix
-
-
-# def find_point_from_prediction(pred_points:np.array, frame:dict)->dict:
-#   '''
-#   Given predicted state of instance centeroid, find the closest segemented cluster
-#   '''
-#   if frame == []:  #如果此帧为空
-#     return   
-#   pred_x, pred_y = pred_points[0:2]
-#   min_distance = 1e5
-#   optimal_point = None
-#   for instance in frame['seg instances'].values():
-#     cluster = instance['points']
-#     segement_centroid_x, segement_centroid_y = get_cluster_centeroid(cluster)
-#     distance = euclidean_distance(segement_centroid_x, segement_centroid_y, 
-#                                   pred_x, pred_y)
-#     if min_distance > distance:
-#       min_distance = distance
-#       optimal_point = instance # points with class ID
-#   return optimal_point
-
-
-# def get_cluster_centeroid(cluster:np.ndarray)->Tuple[float, float]:
-#   '''
-#   extract the centeroid of an cluster by getting the mean of x, y
-#   '''
-#   x_center = cluster[:, :, 0].mean()
-#   y_center = cluster[:, :, 1].mean()
-#   return np.array((x_center, y_center)).reshape((2, 1))
 
 
 class KalmanBoxTracker(object):
@@ -123,9 +94,9 @@ class KalmanBoxTracker(object):
     self.history = []
     self.hits += 1
     self.hit_streak += 1  # the total number of times it consecutively got matched with a detection in the last frames.
-    # self.kf.update(point[0:2])
-    self.kf.x[:2] = point[0:2]
-    self.kf.x[2:] = point[2:]
+    self.kf.update(point[0:2])
+    # self.kf.x[:2] = point[0:2]
+    # self.kf.x[2:] = point[2:]
     #此处更新直接赋予关联后的点的值
 
   def predict(self):
@@ -151,7 +122,7 @@ def associate_detections_to_trackers(points, trackers, distance_threshold = 0.3)
   'Assigns instance segmentations to tracked object (both represented as clusters)'
   'param trackers: trackers predictions in this frame'
   'Returns 3 lists of matches, unmatched_detections and unmatched_trackers'
-  if len((trackers) == 0) or len((points) == 0):    #如果跟踪器为空
+  if (len(trackers) == 0):    #如果跟踪器为空
     return np.empty((0,2),dtype=int), np.arange(len(points)),np.empty((0,5),dtype=int)
     # matched, unmatched_dets, unmatched_trks
   
@@ -239,11 +210,10 @@ class Sort(object):
       self.trackers.append(trk)
     i = len(self.trackers)
     for trk in reversed(self.trackers):
-      d = trk.get_state()  #获取trk跟踪器的状态
+      d = trk.get_state()  #获取trk跟踪器的状态,问题：此处只会出现点的x,y值，多普勒速度，RCS值，从开始输入的class_id却消失了？（没有id）
       # rule-based track management 持续更新+连续match数量大于最小阈值或者还没到更新次数还没达到该阈值,最初几帧
-      # if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
-      #此处有问题：如果加上此if判断语句的话则无法呈现出第2帧及其之后的帧数，是否为初始参数max_age and min_hit设置的不正确？
-      ret.append(d)
+      if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
+        ret.append(d) #此处亦无任何id信息
       i -= 1
       #delete death track
       if(trk.time_since_update > self.max_age):
@@ -314,13 +284,13 @@ if __name__ == '__main__':
         # print(cluster.shape)
         cluster = cluster.numpy().squeeze(axis=0)
         # print(cluster.shape)
-        num_row = cluster.shape[0]
+        num_row = cluster.shape[0] #每一帧中的各个cluster中有几个点
         class_id_vec = np.ones((num_row, 1)) * class_id
         # 给每个tracker一个class—id 不变状态，只对class_id相同的进行association,class_id不同的矩阵对应位置赋为无穷大
         cluster_with_class = np.concatenate((cluster, class_id_vec), axis=1)  #在第1轴上重新组合
         points = np.concatenate((points, cluster_with_class), axis=0)  #在第0轴上重新组合
-      points = np.delete(points, 0, axis=0)  #删去第0轴为0的值
-      # points = np.squeeze(points)
+      points = np.delete(points, 0, axis=0)  #删去最初赋予在第0轴上的0值
+      # 分别赋予每一个输入的点相关的class_id
       
 
       if(display):
@@ -348,7 +318,7 @@ if __name__ == '__main__':
 
 
       start_time = time.time()
-      tracked_points = mot_tracker.update(points) #更新sort跟踪器
+      tracked_points = mot_tracker.update(points) #更新sort跟踪器，但是所跟踪出来的点没有id信息
       cycle_time = time.time() - start_time  #sort跟踪器耗时
       total_time += cycle_time  #sort跟踪器总耗时
 
@@ -356,12 +326,14 @@ if __name__ == '__main__':
         print('Tracked Points x:{} y:{}'.format(tracked_point[0], tracked_point[1]))
       if (display):
         tracked_points = np.array(tracked_points)
+        color = COLOR[track_id_list.index(track_id)%NUM_COLOR]
         ax2.scatter(tracked_points[:,1], tracked_points[:,0], c=color, s=7)
         ax2.set_xlabel('y_cc/m')
         ax2.set_ylabel('x_cc/m')
         ax2.set_xlim(50, -50)
         ax2.set_ylim(0, 100)
         ax2.set_title('Tracking')
+
     else:
       points = np.array([[1e4, 1e4, 1e4, 1e4, 1e4]])
 
